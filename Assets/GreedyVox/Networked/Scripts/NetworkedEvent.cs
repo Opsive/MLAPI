@@ -20,6 +20,9 @@ namespace GreedyVox.Networked {
         private void OnDestroy () {
             NetworkStartEvent = null;
         }
+        /// <summary>
+        /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
+        /// </summary>
         public override void NetworkStart () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
             if (NetworkStartEvent != null) { NetworkStartEvent (); }

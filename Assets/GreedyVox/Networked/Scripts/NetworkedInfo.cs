@@ -35,7 +35,8 @@ namespace GreedyVox.Networked {
         /// </summary>
         /// <returns>True if the character is the local player.</returns>
         bool INetworkInfo.IsLocalPlayer () {
-            return IsLocalPlayer;
+            // return IsLocalPlayer;
+            return IsOwner;
         }
         public bool IsPlayer () {
             return IsClient;
