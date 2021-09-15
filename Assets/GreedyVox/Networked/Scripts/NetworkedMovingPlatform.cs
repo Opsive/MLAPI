@@ -1,6 +1,4 @@
-﻿using GreedyVox.Networked.Events;
-using GreedyVox.ProjectManagers;
-using MLAPI;
+﻿using MLAPI;
 using MLAPI.Messaging;
 using MLAPI.Serialization.Pooled;
 using MLAPI.Transports;
@@ -30,7 +28,7 @@ namespace GreedyVox.Networked {
         /// </summary>
         protected override void OnDisable () {
             base.OnDisable ();
-            EventManager.Instance.RemoveListener<PlayerJoinedEvent> (OnEvent);
+            // EventManager.Instance.RemoveListener<PlayerJoinedEvent> (OnEvent);
         }
         /// <summary>
         /// The object has been enabled.
@@ -38,7 +36,7 @@ namespace GreedyVox.Networked {
         protected override void OnEnable () {
             base.OnEnable ();
             if (m_NetworkInfo != null && m_NetworkInfo.IsServerHost ()) {
-                EventManager.Instance.AddListener<PlayerJoinedEvent> (OnEvent);
+                // EventManager.Instance.AddListener<PlayerJoinedEvent> (OnEvent);
             }
         }
         private void Start () {
@@ -67,7 +65,7 @@ namespace GreedyVox.Networked {
         /// A event from Photon has been sent.
         /// </summary>
         /// <param name="photonEvent">The Photon event.</param>
-        public void OnEvent (PlayerJoinedEvent e) {
+        public void OnEvent (ulong id) {
             var nextWaypointEventDelay = -1f;
             if (m_NextWaypointEvent != null) {
                 nextWaypointEventDelay = m_NextWaypointEvent.EndTime - Time.time;
@@ -93,7 +91,7 @@ namespace GreedyVox.Networked {
                     writer.WriteVector3Packed (m_TargetPosition);
                     writer.WriteRotationPacked (m_TargetRotation);
                     writer.WriteInt32Packed (m_ActiveCharacterCount);
-                    CustomMessagingManager.SendNamedMessage (m_MsgClient, e.ID, stream, NetworkChannel.ChannelUnused);
+                    CustomMessagingManager.SendNamedMessage (m_MsgClient, id, stream, NetworkChannel.ChannelUnused);
                 }
             }
         }

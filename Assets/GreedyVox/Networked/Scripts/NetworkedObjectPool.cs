@@ -13,11 +13,12 @@ namespace GreedyVox.Networked {
     public class NetworkedObjectPool : NetworkObjectPool {
         [SerializeField] private NetworkedMessenger m_NetworkedMessenger = default;
         [Tooltip ("An array of objects that can be spawned over the network. Any object that can be spawned on the network must be within this list.")]
+        private NetworkObject m_NetworkObject;
+        private NetworkedSettingsAbstract m_Settings;
+        private HashSet<GameObject> m_SpawnedGameObjects = new HashSet<GameObject> ();
         private Dictionary<string, GameObject> m_ResourceCache = new Dictionary<string, GameObject> ();
         private Dictionary<GameObject, int> m_SpawnableGameObjectIDMap = new Dictionary<GameObject, int> ();
         private Dictionary<GameObject, ISpawnDataObject> m_ActiveGameObjects = new Dictionary<GameObject, ISpawnDataObject> ();
-        private HashSet<GameObject> m_SpawnedGameObjects = new HashSet<GameObject> ();
-        private NetworkedSettingsAbstract m_Settings;
         /// Initialize the default values.
         /// </summary>
         private void Start () {
@@ -45,20 +46,19 @@ namespace GreedyVox.Networked {
                 if (!m_ActiveGameObjects.ContainsKey (instanceObject)) {
                     m_ActiveGameObjects.Add (instanceObject, instanceObject.GetCachedComponent<ISpawnDataObject> ());
                 }
-                var net = instanceObject.GetCachedComponent<NetworkObject> ();
-                if (net != null) {
-                    if (NetworkManager.Singleton.IsServer) {
-                        // The pooled object can optionally provide initialization spawn data.
-                        var spawnDataObject = instanceObject.GetCachedComponent<ISpawnDataObject> ();
-                        if (spawnDataObject == null) {
-                            net.Spawn ();
-                        } else {
-                            // TODO: cause the object maybe already spawned, a pooled object will need to be handle                    
-                            using (var stream = PooledNetworkBuffer.Get())
-                            using (var writer = PooledNetworkWriter.Get (stream)) {
-                                spawnDataObject.SpawnData (writer);
-                                net.Spawn (stream);
-                            }
+
+                if (NetworkManager.Singleton.IsServer &&
+                    (m_NetworkObject = instanceObject.GetCachedComponent<NetworkObject> ()) != null) {
+                    // The pooled object can optionally provide initialization spawn data.
+                    var data = instanceObject.GetCachedComponent<ISpawnDataObject> ();
+                    if (data == null) {
+                        m_NetworkObject.Spawn ();
+                    } else {
+                        // TODO: cause the object maybe already spawned, a pooled object will need to be handle                    
+                        using (var stream = PooledNetworkBuffer.Get ())
+                        using (var writer = PooledNetworkWriter.Get (stream)) {
+                            data.SpawnData (writer);
+                            m_NetworkObject.Spawn (stream);
                         }
                     }
                 }
@@ -78,19 +78,14 @@ namespace GreedyVox.Networked {
         /// </summary>
         /// <param name="obj">The object that should be destroyed.</param>
         protected virtual void DestroyInternalExtended (GameObject obj) {
-            var net = obj.GetComponent<NetworkObject> ();
-            if (net != null && net.IsSpawned) {
-
-                Debug.LogFormat ("<color=red>DestroyInternalExtended: [{0}] Is Server? {1} Is Spawned? {2}</color>",
-                    obj.name, NetworkManager.Singleton.IsServer, net.IsSpawned);
-
+            if ((m_NetworkObject = obj.GetComponent<NetworkObject> ()) != null && m_NetworkObject.IsSpawned) {
                 if (NetworkManager.Singleton.IsServer) {
-                    net.Despawn ();
+                    m_NetworkObject.Despawn ();
                 } else {
-                    m_NetworkedMessenger?.ClientDespawnObject (net.NetworkObjectId);
+                    m_NetworkedMessenger?.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
                 }
             }
-            if (net == null || !net.IsSpawned) {
+            if (m_NetworkObject == null || !m_NetworkObject.IsSpawned) {
                 m_ActiveGameObjects.Remove (obj);
                 ObjectPool.Destroy (obj);
             }

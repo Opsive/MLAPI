@@ -1,7 +1,4 @@
 ﻿using System.Collections;
-using GreedyVox.Networked.Events;
-using GreedyVox.ProjectManagers;
-using GreedyVox.UI.Ping.Event;
 using MLAPI;
 using MLAPI.Transports;
 using UnityEngine;
@@ -28,8 +25,6 @@ namespace GreedyVox.Networked {
         /// </summary>
         public override void NetworkStart () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
-            EventManager.Instance.Raise (new PlayerJoinedEvent (OwnerClientId));
-
             if (NetworkStartEvent != null) { NetworkStartEvent (); }
             m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
             if (IsLocalPlayer && m_Transport != null && m_Coroutine == null) {
@@ -42,8 +37,8 @@ namespace GreedyVox.Networked {
         private IEnumerator NetworkTimer () {
             var wait = new WaitForSecondsRealtime (0.5f);
             while (isActiveAndEnabled) {
-                EventManager.Instance.Raise (new PingUpdateEvent (
-                    (short) m_Transport.GetCurrentRtt (m_ServerID)));
+                // Your ping event code here....
+                var ping = m_Transport.GetCurrentRtt (m_ServerID);
                 yield return wait;
             }
             m_Coroutine = null;

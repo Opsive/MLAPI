@@ -67,7 +67,6 @@ public class NetworkedPlayerInspector : EditorWindow {
         }
         TryAddComponent<NetworkObject> (obj);
         TryAddComponent<NetworkedCharacterTransformMonitor> (obj);
-        TryAddComponent<NetworkedCharacterPositionMonitor> (obj);
         TryAddComponent<NetworkedAnimatorMonitor> (obj);
         TryAddComponent<NetworkedLookSource> (obj);
         TryAddComponent<NetworkedCharacter> (obj);

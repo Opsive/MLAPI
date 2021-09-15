@@ -1,7 +1,8 @@
-﻿using MLAPI;
+using System.Collections.Generic;
 using MLAPI.Messaging;
 using MLAPI.Serialization.Pooled;
 using MLAPI.Transports;
+using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Character;
 using Opsive.UltimateCharacterController.Networking;
 using UnityEngine;
@@ -9,8 +10,10 @@ using UnityEngine;
 /// <summary>
 /// Synchronizes the Ultimate Character Controller animator across the network.
 /// </summary>
-namespace GreedyVox.Networked {
-    public class NetworkedAnimatorMonitor : AnimatorMonitor {
+namespace GreedyVox.Networked.Ai {
+    [DisallowMultipleComponent]
+    [RequireComponent (typeof (NetworkedSyncRate))]
+    public class NetworkedAnimatorAiMonitor : AnimatorMonitor {
         /// <summary>
         /// Specifies which parameters are dirty.
         /// </summary>
@@ -28,26 +31,23 @@ namespace GreedyVox.Networked {
             AbilityIntData = 1024, // The Ability Int Data parameter has changed.
             AbilityFloatData = 2048 // The Ability Float Data parameter has changed.
         }
-        private INetworkInfo m_NetworkInfo;
-        private NetworkedEvent m_NetworkEvent;
-        private NetworkedManager m_NetworkManager;
-        private int m_SnappedAbilityIndex = -1;
         private short m_DirtyFlag;
         private byte m_ItemDirtySlot;
-        private float m_NetworkHorizontalMovement;
-        private float m_NetworkForwardMovement;
-        private float m_NetworkPitch;
-        private float m_NetworkYaw;
-        private float m_NetworkSpeed;
-        private float m_NetworkAbilityFloatData;
-        private ulong m_ServerID;
-        private string m_MsgServerPara, m_MsgServerItems;
-        private string m_MsgClientAnima, m_MsgServerAnima;
+        private string m_MsgAnimator;
+        private INetworkInfo m_NetworkInfo;
+        private NetworkedEvent m_NetworkEvent;
+        private NetworkedSyncRate m_NetworkSync;
+        private NetworkedManager m_NetworkManager;
+        private int m_SnappedAbilityIndex = -1;
+        private float m_NetworkYaw, m_NetworkPitch, m_NetworkSpeed;
+        private float m_NetworkHorizontalMovement, m_NetworkForwardMovement, m_NetworkAbilityFloatData;
         protected override void Awake () {
             base.Awake ();
             m_NetworkManager = NetworkedManager.Instance;
             m_NetworkInfo = GetComponent<INetworkInfo> ();
             m_NetworkEvent = GetComponent<NetworkedEvent> ();
+            m_NetworkSync = gameObject.GetCachedComponent<NetworkedSyncRate> ();
+
             m_NetworkEvent.NetworkStartEvent += OnNetworkStartEvent;
         }
         /// <summary>
@@ -64,101 +64,43 @@ namespace GreedyVox.Networked {
             }
         }
         private void OnDisable () {
-            m_NetworkManager.NetworkSettings.NetworkSyncServerEvent -= OnNetworkSyncServerEvent;
-            m_NetworkManager.NetworkSettings.NetworkSyncClientEvent -= OnNetworkSyncClientEvent;
+            m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
         }
         /// <summary>
         /// The character has been destroyed.
         /// </summary>
         private void OnDestroy () {
-            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgServerPara);
-            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgServerItems);
-            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgClientAnima);
-            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgServerAnima);
+            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgAnimator);
         }
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
         /// </summary>
         private void OnNetworkStartEvent () {
-            m_ServerID = NetworkManager.Singleton.ServerClientId;
-            m_MsgServerPara = $"{m_NetworkEvent.NetworkObjectId}MsgServerPara{m_NetworkEvent.OwnerClientId}";
-            m_MsgServerItems = $"{m_NetworkEvent.NetworkObjectId}MsgServerItems{m_NetworkEvent.OwnerClientId}";
-            m_MsgClientAnima = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{m_NetworkEvent.OwnerClientId}";
-            m_MsgServerAnima = $"{m_NetworkEvent.NetworkObjectId}MsgServerAnima{m_NetworkEvent.OwnerClientId}";
+            m_NetworkSync.NetworkSyncEvent += OnNetworkSyncEvent;
+            m_MsgAnimator = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{ m_NetworkEvent.OwnerClientId}";
 
-            if (m_NetworkInfo.IsServer ()) {
-                m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
-            } else if (m_NetworkEvent.IsOwner) {
-                m_NetworkManager.NetworkSettings.NetworkSyncClientEvent += OnNetworkSyncClientEvent;
-            }
-
-            if (!m_NetworkEvent.IsOwner) {
+            if (!m_NetworkInfo.IsServer ()) {
                 m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent;
-                if (m_NetworkInfo.IsServer ()) {
-                    CustomMessagingManager.RegisterNamedMessageHandler (m_MsgServerAnima, (sender, stream) => {
-                        using (PooledNetworkReader reader = PooledNetworkReader.Get (stream)) {
-                            SynchronizeParameters (reader);
-                        }
-                    });
-                    CustomMessagingManager.RegisterNamedMessageHandler (m_MsgServerPara, (sender, stream) => {
-                        using (PooledNetworkReader reader = PooledNetworkReader.Get (stream)) {
-                            InitializeParameters (reader);
-                        }
-                    });
-                    CustomMessagingManager.RegisterNamedMessageHandler (m_MsgServerItems, (sender, stream) => {
-                        using (PooledNetworkReader reader = PooledNetworkReader.Get (stream)) {
-                            InitializeItemParameters (reader);
-                        }
-                    });
-                } else {
-                    CustomMessagingManager.RegisterNamedMessageHandler (m_MsgClientAnima, (sender, stream) => {
-                        using (PooledNetworkReader reader = PooledNetworkReader.Get (stream)) {
-                            SynchronizeParameters (reader);
-                        }
-                    });
-                }
-            } else if (m_NetworkInfo.IsLocalPlayer ()) {
-                using (var stream = PooledNetworkBuffer.Get ()) {
-                    using (var writer = PooledNetworkWriter.Get (stream)) {
-                        InitializeParameters (writer);
-                        CustomMessagingManager.SendNamedMessage (m_MsgServerPara, m_ServerID, stream, NetworkChannel.ChannelUnused);
+                CustomMessagingManager.RegisterNamedMessageHandler (m_MsgAnimator, (sender, stream) => {
+                    using (var reader = PooledNetworkReader.Get (stream)) {
+                        SynchronizeParameters (reader);
                     }
-                }
-                if (HasItemParameters) {
-                    for (int i = 0; i < ParameterSlotCount; ++i) {
-                        using (var stream = PooledNetworkBuffer.Get ()) {
-                            using (var writer = PooledNetworkWriter.Get (stream)) {
-                                InitializeItemParameters (writer, i);
-                                CustomMessagingManager.SendNamedMessage (m_MsgServerItems, m_ServerID, stream, NetworkChannel.ChannelUnused);
-                            }
-                        }
-                    }
-                }
+                });
             }
         }
         /// <summary>
-        /// Network sync event called from the NetworkInfo component
+        /// Network broadcast event called from the NetworkedSyncRate component
         /// </summary>
-        private void OnNetworkSyncClientEvent () {
-            using (var stream = PooledNetworkBuffer.Get ()) {
-                using (var writer = PooledNetworkWriter.Get (stream)) {
-                    SynchronizeParameters (writer);
-                    CustomMessagingManager.SendNamedMessage (m_MsgServerAnima, m_ServerID, stream, NetworkChannel.ChannelUnused);
+        private void OnNetworkSyncEvent (List<ulong> clients) {
+            using (var stream = PooledNetworkBuffer.Get ())
+            using (var writer = PooledNetworkWriter.Get (stream)) {
+                if (SynchronizeParameters (writer)) {
+                    CustomMessagingManager.SendNamedMessage (m_MsgAnimator, clients, stream, NetworkChannel.ChannelUnused);
                 }
             }
         }
-        /// <summary>
-        /// Network broadcast event called from the NetworkInfo component
-        /// </summary>
-        private void OnNetworkSyncServerEvent () {
-            using (var stream = PooledNetworkBuffer.Get ()) {
-                using (var writer = PooledNetworkWriter.Get (stream)) {
-                    SynchronizeParameters (writer);
-                    CustomMessagingManager.SendNamedMessage (m_MsgClientAnima, null, stream, NetworkChannel.ChannelUnused);
-                }
-            }
-        }
+
         /// <summary>
         /// Reads/writes the continuous animator parameters.
         /// </summary>
@@ -284,7 +226,8 @@ namespace GreedyVox.Networked {
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written.</param>
-        private void SynchronizeParameters (PooledNetworkWriter stream) {
+        private bool SynchronizeParameters (PooledNetworkWriter stream) {
+            bool results = m_DirtyFlag > 0;
             stream.WriteInt16Packed (m_DirtyFlag);
             if ((m_DirtyFlag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
                 stream.WriteSinglePacked (HorizontalMovement);
@@ -322,6 +265,7 @@ namespace GreedyVox.Networked {
             }
             m_DirtyFlag = 0;
             m_ItemDirtySlot = 0;
+            return results;
         }
         /// <summary>
         /// Sets the Horizontal Movement parameter to the specified value.

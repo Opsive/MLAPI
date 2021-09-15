@@ -1,10 +1,11 @@
 ﻿using System.Collections.Generic;
-using GreedyVox.ProjectManagers.Events;
 using MLAPI;
 using MLAPI.Messaging;
 using MLAPI.Spawning;
 using Opsive.Shared.Game;
+using Opsive.UltimateCharacterController.Networking.Game;
 using Opsive.UltimateCharacterController.Networking.Traits;
+using Opsive.UltimateCharacterController.Objects;
 using Opsive.UltimateCharacterController.Traits;
 using UnityEngine;
 
@@ -14,7 +15,8 @@ using UnityEngine;
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedHealthMonitor : NetworkBehaviour, INetworkHealthMonitor {
-        [SerializeField] private GameEventUlongUlong m_DiedSyncEvent;
+        [Tooltip ("Spawn objects on death over the network.")]
+        [SerializeField] private GameObject[] m_SpawnObjectsOnDeath;
         private Health m_Health;
         private GameObject m_GamingObject;
         private NetworkedSettingsAbstract m_Settings;
@@ -28,6 +30,35 @@ namespace GreedyVox.Networked {
             m_NetworkObjects = NetworkSpawnManager.SpawnedObjects;
             m_Settings = NetworkedManager.Instance.NetworkSettings;
             m_Health = m_GamingObject.GetCachedComponent<Health> ();
+        }
+        /// <summary>
+        /// Spawn objects on death over the network.
+        /// <param name="position">The position of the damage.</param>
+        /// <param name="direction">The direction that the object took damage from.</param>
+        /// </summary>
+        private void SpawnObjectsOnDeath (Vector3 position, Vector3 force) {
+            // Spawn any objects on death, such as an explosion if the object is an explosive barrel.
+            if (m_SpawnObjectsOnDeath != null) {
+                Explosion exp;
+                for (int n = 0; n < m_SpawnObjectsOnDeath.Length; n++) {
+                    var go = m_SpawnObjectsOnDeath[n];
+                    var obj = ObjectPool.Instantiate (go, transform.position, transform.rotation);
+                    if (obj == null || obj.GetComponent<NetworkObject> () == null) {
+                        Debug.LogError ($"Spawning Obect {obj} over network requires having the NetworkedObject component.");
+                        continue;
+                    }
+
+                    NetworkObjectPool.NetworkSpawn (go, obj, true);
+                    if ((exp = obj.GetCachedComponent<Explosion> ()) != null) {
+                        exp.Explode (gameObject);
+                    }
+
+                    var rigs = obj.GetComponentsInChildren<Rigidbody> ();
+                    for (int i = 0; i < rigs.Length; i++) {
+                        rigs[i].AddForceAtPosition (force, position);
+                    }
+                }
+            }
         }
         /// <summary>
         /// The object has taken been damaged.
@@ -116,11 +147,12 @@ namespace GreedyVox.Networked {
                 attackerID = (long) attackerObject.NetworkObjectId;
             }
             if (IsServer) {
+                SpawnObjectsOnDeath (position, force);
+                NetworkObjectPool.Destroy (gameObject);
                 DieClientRpc (position, force, attackerID);
             } else {
                 DieServerRpc (position, force, attackerID);
             }
-            m_DiedSyncEvent?.Raise (OwnerClientId, (ulong) attackerID);
         }
         /// <summary>
         /// The object is no longer alive on the network.
@@ -140,6 +172,8 @@ namespace GreedyVox.Networked {
 
         [ServerRpc]
         private void DieServerRpc (Vector3 position, Vector3 force, long attackerID) {
+            SpawnObjectsOnDeath (position, force);
+            NetworkObjectPool.Destroy (gameObject);
             if (!IsClient) { DieRpc (position, force, attackerID); }
             DieClientRpc (position, force, attackerID);
         }
