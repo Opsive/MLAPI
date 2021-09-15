@@ -1,15 +1,10 @@
-﻿using GreedyVox.Networked.Events;
-using GreedyVox.ProjectManagers;
-using GreedyVox.ProjectManagers.Events;
-using MLAPI;
+﻿using MLAPI;
 using UnityEngine;
 
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedManager : AbstractSingletonBehaviour<NetworkedManager> {
         [SerializeField] private NetworkedSettingsAbstract m_NetworkSettings = null;
-        [SerializeField] private GameEventUlong m_ClientConnectEvent = default;
-        [SerializeField] private GameEventUlong m_ClientDisconnectEvent = default;
         public NetworkedSettingsAbstract NetworkSettings { get { return m_NetworkSettings; } }
         private AudioSource m_AudioSource;
         private NetworkManager _Connection;
@@ -29,12 +24,12 @@ namespace GreedyVox.Networked {
             }
 
             Connection.OnServerStarted += () => {
-                if (NetworkManager.Singleton.IsHost) { m_ClientConnectEvent?.Raise (0); }
-                EventManager.Instance.Raise (new ServerStartedEvent ());
+                if (NetworkManager.Singleton.IsHost) {
+                    Debug.Log ("<color=white>Server Started</color>");
+                }
             };
 
             Connection.OnClientDisconnectCallback += ID => {
-                m_ClientDisconnectEvent?.Raise (ID);
                 m_NetworkSettings.PlayDisconnect (m_AudioSource);
                 Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red>{0}</color></b>]</color>", ID);
             };
@@ -42,8 +37,7 @@ namespace GreedyVox.Networked {
             Connection.OnClientConnectedCallback += ID => {
                 m_NetworkSettings.PlayConnect (m_AudioSource);
                 var client = Connection.ConnectedClients[ID];
-                EventManager.Instance.Raise (new PlayerConnectedEvent (ID));
-                m_ClientConnectEvent?.Raise (ID);
+                Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", client, ID);
             };
         }
         private void Start () {
