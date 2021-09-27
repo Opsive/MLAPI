@@ -66,11 +66,7 @@ namespace GreedyVox.Networked.Ai {
         private void OnDisable () {
             m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
-        }
-        /// <summary>
-        /// The character has been destroyed.
-        /// </summary>
-        private void OnDestroy () {
+
             CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgAnimator);
         }
         /// <summary>

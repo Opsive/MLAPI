@@ -119,19 +119,17 @@ namespace GreedyVox.Networked {
                     });
                 }
             } else if (m_NetworkInfo.IsLocalPlayer ()) {
-                using (var stream = PooledNetworkBuffer.Get ()) {
-                    using (var writer = PooledNetworkWriter.Get (stream)) {
-                        InitializeParameters (writer);
-                        CustomMessagingManager.SendNamedMessage (m_MsgServerPara, m_ServerID, stream, NetworkChannel.ChannelUnused);
-                    }
+                using (var stream = PooledNetworkBuffer.Get ())
+                using (var writer = PooledNetworkWriter.Get (stream)) {
+                    InitializeParameters (writer);
+                    CustomMessagingManager.SendNamedMessage (m_MsgServerPara, m_ServerID, stream, NetworkChannel.ChannelUnused);
                 }
                 if (HasItemParameters) {
-                    for (int i = 0; i < ParameterSlotCount; ++i) {
-                        using (var stream = PooledNetworkBuffer.Get ()) {
-                            using (var writer = PooledNetworkWriter.Get (stream)) {
-                                InitializeItemParameters (writer, i);
-                                CustomMessagingManager.SendNamedMessage (m_MsgServerItems, m_ServerID, stream, NetworkChannel.ChannelUnused);
-                            }
+                    for (int i = 0; i < ParameterSlotCount; i++) {
+                        using (var stream = PooledNetworkBuffer.Get ())
+                        using (var writer = PooledNetworkWriter.Get (stream)) {
+                            InitializeItemParameters (writer, i);
+                            CustomMessagingManager.SendNamedMessage (m_MsgServerItems, m_ServerID, stream, NetworkChannel.ChannelUnused);
                         }
                     }
                 }
@@ -141,22 +139,20 @@ namespace GreedyVox.Networked {
         /// Network sync event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncClientEvent () {
-            using (var stream = PooledNetworkBuffer.Get ()) {
-                using (var writer = PooledNetworkWriter.Get (stream)) {
-                    SynchronizeParameters (writer);
-                    CustomMessagingManager.SendNamedMessage (m_MsgServerAnima, m_ServerID, stream, NetworkChannel.ChannelUnused);
-                }
+            using (var stream = PooledNetworkBuffer.Get ())
+            using (var writer = PooledNetworkWriter.Get (stream)) {
+                SynchronizeParameters (writer);
+                CustomMessagingManager.SendNamedMessage (m_MsgServerAnima, m_ServerID, stream, NetworkChannel.ChannelUnused);
             }
         }
         /// <summary>
         /// Network broadcast event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncServerEvent () {
-            using (var stream = PooledNetworkBuffer.Get ()) {
-                using (var writer = PooledNetworkWriter.Get (stream)) {
-                    SynchronizeParameters (writer);
-                    CustomMessagingManager.SendNamedMessage (m_MsgClientAnima, null, stream, NetworkChannel.ChannelUnused);
-                }
+            using (var stream = PooledNetworkBuffer.Get ())
+            using (var writer = PooledNetworkWriter.Get (stream)) {
+                SynchronizeParameters (writer);
+                CustomMessagingManager.SendNamedMessage (m_MsgClientAnima, null, stream, NetworkChannel.ChannelUnused);
             }
         }
         /// <summary>

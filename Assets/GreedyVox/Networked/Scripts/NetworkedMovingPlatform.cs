@@ -24,19 +24,12 @@ namespace GreedyVox.Networked {
             m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
         }
         /// <summary>
-        /// The object has been disabled.
-        /// </summary>
-        protected override void OnDisable () {
-            base.OnDisable ();
-            // EventManager.Instance.RemoveListener<PlayerJoinedEvent> (OnEvent);
-        }
-        /// <summary>
         /// The object has been enabled.
         /// </summary>
         protected override void OnEnable () {
             base.OnEnable ();
             if (m_NetworkInfo != null && m_NetworkInfo.IsServerHost ()) {
-                // EventManager.Instance.AddListener<PlayerJoinedEvent> (OnEvent);
+                NetworkManager.Singleton.OnClientConnectedCallback += ID => { OnEvent (ID); };
             }
         }
         private void Start () {
@@ -62,37 +55,34 @@ namespace GreedyVox.Networked {
                 });
         }
         /// <summary>
-        /// A event from Photon has been sent.
+        /// A event from the server has been sent.
         /// </summary>
-        /// <param name="photonEvent">The Photon event.</param>
+        /// <param name="photonEvent">The server event.</param>
         public void OnEvent (ulong id) {
-            var nextWaypointEventDelay = -1f;
+            var nextWaypointEventDelay = -1.0f;
             if (m_NextWaypointEvent != null) {
                 nextWaypointEventDelay = m_NextWaypointEvent.EndTime - Time.time;
             }
             var activeStates = 0;
-            for (int i = 0; i < States.Length - 1; ++i) {
-                if (States[i].Active) {
-                    activeStates |= (int) Mathf.Pow (i + 1, 2);
-                }
+            for (int i = 0; i < States.Length - 1; i++) {
+                if (States[i].Active) { activeStates |= (int) Mathf.Pow (i + 1, 2); }
             }
-            using (var stream = PooledNetworkBuffer.Get ()) {
-                using (var writer = PooledNetworkWriter.Get (stream)) {
-                    writer.WriteVector3Packed (m_Transform.position);
-                    writer.WriteRotationPacked (m_Transform.rotation);
-                    writer.WriteInt32Packed (activeStates);
-                    writer.WriteInt32Packed ((int) m_Direction);
-                    writer.WriteInt32Packed (m_NextWaypoint);
-                    writer.WriteInt32Packed (m_PreviousWaypoint);
-                    writer.WriteSinglePacked (m_NextWaypointDistance);
-                    writer.WriteSinglePacked (nextWaypointEventDelay);
-                    writer.WriteRotationPacked (m_OriginalRotation);
-                    writer.WriteSinglePacked (m_MoveTime);
-                    writer.WriteVector3Packed (m_TargetPosition);
-                    writer.WriteRotationPacked (m_TargetRotation);
-                    writer.WriteInt32Packed (m_ActiveCharacterCount);
-                    CustomMessagingManager.SendNamedMessage (m_MsgClient, id, stream, NetworkChannel.ChannelUnused);
-                }
+            using (var stream = PooledNetworkBuffer.Get ())
+            using (var writer = PooledNetworkWriter.Get (stream)) {
+                writer.WriteVector3Packed (m_Transform.position);
+                writer.WriteRotationPacked (m_Transform.rotation);
+                writer.WriteInt32Packed (activeStates);
+                writer.WriteInt32Packed ((int) m_Direction);
+                writer.WriteInt32Packed (m_NextWaypoint);
+                writer.WriteInt32Packed (m_PreviousWaypoint);
+                writer.WriteSinglePacked (m_NextWaypointDistance);
+                writer.WriteSinglePacked (nextWaypointEventDelay);
+                writer.WriteRotationPacked (m_OriginalRotation);
+                writer.WriteSinglePacked (m_MoveTime);
+                writer.WriteVector3Packed (m_TargetPosition);
+                writer.WriteRotationPacked (m_TargetRotation);
+                writer.WriteInt32Packed (m_ActiveCharacterCount);
+                CustomMessagingManager.SendNamedMessage (m_MsgClient, id, stream, NetworkChannel.ChannelUnused);
             }
         }
         /// <summary>
@@ -122,7 +112,7 @@ namespace GreedyVox.Networked {
                 m_NextWaypointEvent = Scheduler.ScheduleFixed (nextWaypointEventDelay, UpdateWaypoint);
             }
             // The states should match the master client.
-            for (int i = 0; i < States.Length - 1; ++i) {
+            for (int i = 0; i < States.Length - 1; i++) {
                 if (((int) Mathf.Pow (i + 1, 2) & activeStates) != 0) {
                     StateManager.SetState (m_GameObject, States[i].Name, true);
                 }

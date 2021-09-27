@@ -14,16 +14,15 @@ namespace GreedyVox.Networked {
         private void Start () {
             if (IsClient) {
                 // Sending
-                using (var stream = PooledNetworkBuffer.Get ()) {
-                    using (var writer = PooledNetworkWriter.Get (stream)) {
-                        writer.WriteVector3Packed (transform.position);
-                        writer.WriteRotationPacked (transform.rotation);
-                        CustomMessagingManager.SendNamedMessage (
-                            "MsgPlayerDropItem",
-                            NetworkManager.Singleton.ServerClientId,
-                            stream,
-                            NetworkChannel.ChannelUnused);
-                    }
+                using (var stream = PooledNetworkBuffer.Get ())
+                using (var writer = PooledNetworkWriter.Get (stream)) {
+                    writer.WriteVector3Packed (transform.position);
+                    writer.WriteRotationPacked (transform.rotation);
+                    CustomMessagingManager.SendNamedMessage (
+                        "MsgPlayerDropItem",
+                        NetworkManager.Singleton.ServerClientId,
+                        stream,
+                        NetworkChannel.ChannelUnused);
                 }
             }
             GameObject.Destroy (gameObject);
