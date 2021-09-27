@@ -127,7 +127,6 @@ namespace GreedyVox.Networked {
 
         [ClientRpc]
         private void DamageClientRpc (float amount, Vector3 position, Vector3 direction, float magnitude, int frames, float radius, long attackerID, long hitID, int hitSlotID) {
-            // if (!IsOwner) { DamageRpc (amount, position, direction, magnitude, frames, radius, attackerID, hitID, hitSlotID); }
             DamageRpc (amount, position, direction, magnitude, frames, radius, attackerID, hitID, hitSlotID);
         }
         /// <summary>
