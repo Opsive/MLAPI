@@ -1,11 +1,9 @@
-﻿using MLAPI;
-using MLAPI.Messaging;
-using MLAPI.Serialization.Pooled;
-using MLAPI.Transports;
-using Opsive.Shared.Game;
+﻿using Opsive.Shared.Game;
 using Opsive.Shared.StateSystem;
 using Opsive.UltimateCharacterController.Game;
 using Opsive.UltimateCharacterController.Objects;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -13,15 +11,17 @@ using UnityEngine;
 /// </summary>
 namespace GreedyVox.Networked {
     public class NetworkedMovingPlatform : MovingPlatform {
-        private string m_MsgClient;
+        private string m_MsgName;
         private NetworkedInfo m_NetworkInfo;
         private NetworkTransport m_Transport;
         private NetworkedSettingsAbstract m_Settings;
+        private CustomMessagingManager m_CustomMessagingManager;
         protected override void Awake () {
             base.Awake ();
             m_NetworkInfo = GetComponent<NetworkedInfo> ();
             m_Settings = NetworkedManager.Instance.NetworkSettings;
             m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
         }
         /// <summary>
         /// The object has been enabled.
@@ -33,25 +33,24 @@ namespace GreedyVox.Networked {
             }
         }
         private void Start () {
-            m_MsgClient = $"{m_NetworkInfo.NetworkBehaviourId}MsgClientNetworkedMovingPlatform{m_NetworkInfo.OwnerClientId}";
+            m_MsgName = $"{m_NetworkInfo.NetworkBehaviourId}MsgClientNetworkedMovingPlatform{m_NetworkInfo.OwnerClientId}";
             if (m_NetworkInfo.IsLocalPlayer)
-                CustomMessagingManager.RegisterNamedMessageHandler (m_MsgClient, (senderClientId, stream) => {
-                    using (var reader = PooledNetworkReader.Get (stream)) {
-                        InitializeMovingPlatformClientRpc (
-                            reader.ReadVector3Packed (),
-                            reader.ReadRotationPacked (),
-                            reader.ReadInt32Packed (),
-                            reader.ReadInt32Packed (),
-                            reader.ReadInt32Packed (),
-                            reader.ReadInt32Packed (),
-                            reader.ReadSinglePacked (),
-                            reader.ReadSinglePacked (),
-                            reader.ReadRotationPacked (),
-                            reader.ReadSinglePacked (),
-                            reader.ReadVector3Packed (),
-                            reader.ReadRotationPacked (),
-                            reader.ReadInt32Packed ());
-                    }
+                m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgName, (senderClientId, reader) => {
+                    ByteUnpacker.ReadValuePacked (reader, out float time);
+                    ByteUnpacker.ReadValuePacked (reader, out float delay);
+                    ByteUnpacker.ReadValuePacked (reader, out float distance);
+                    ByteUnpacker.ReadValuePacked (reader, out int state);
+                    ByteUnpacker.ReadValuePacked (reader, out int point);
+                    ByteUnpacker.ReadValuePacked (reader, out int direction);
+                    ByteUnpacker.ReadValuePacked (reader, out int previous);
+                    ByteUnpacker.ReadValuePacked (reader, out int count);
+                    ByteUnpacker.ReadValuePacked (reader, out Vector3 target);
+                    ByteUnpacker.ReadValuePacked (reader, out Vector3 position);
+                    ByteUnpacker.ReadValuePacked (reader, out Quaternion facing);
+                    ByteUnpacker.ReadValuePacked (reader, out Quaternion original);
+                    ByteUnpacker.ReadValuePacked (reader, out Quaternion rotation);
+                    InitializeMovingPlatformClientRpc (position, rotation, state, direction,
+                        point, previous, distance, delay, original, time, target, facing, count);
                 });
         }
         /// <summary>
@@ -67,22 +66,36 @@ namespace GreedyVox.Networked {
             for (int i = 0; i < States.Length - 1; i++) {
                 if (States[i].Active) { activeStates |= (int) Mathf.Pow (i + 1, 2); }
             }
-            using (var stream = PooledNetworkBuffer.Get ())
-            using (var writer = PooledNetworkWriter.Get (stream)) {
-                writer.WriteVector3Packed (m_Transform.position);
-                writer.WriteRotationPacked (m_Transform.rotation);
-                writer.WriteInt32Packed (activeStates);
-                writer.WriteInt32Packed ((int) m_Direction);
-                writer.WriteInt32Packed (m_NextWaypoint);
-                writer.WriteInt32Packed (m_PreviousWaypoint);
-                writer.WriteSinglePacked (m_NextWaypointDistance);
-                writer.WriteSinglePacked (nextWaypointEventDelay);
-                writer.WriteRotationPacked (m_OriginalRotation);
-                writer.WriteSinglePacked (m_MoveTime);
-                writer.WriteVector3Packed (m_TargetPosition);
-                writer.WriteRotationPacked (m_TargetRotation);
-                writer.WriteInt32Packed (m_ActiveCharacterCount);
-                CustomMessagingManager.SendNamedMessage (m_MsgClient, id, stream, NetworkChannel.ChannelUnused);
+
+            using (var writer = new FastBufferWriter (
+                FastBufferWriter.GetWriteSize (m_MoveTime) +
+                FastBufferWriter.GetWriteSize (nextWaypointEventDelay) +
+                FastBufferWriter.GetWriteSize (m_NextWaypointDistance) +
+                FastBufferWriter.GetWriteSize (activeStates) +
+                FastBufferWriter.GetWriteSize (m_NextWaypoint) +
+                FastBufferWriter.GetWriteSize ((int) m_Direction) +
+                FastBufferWriter.GetWriteSize (m_PreviousWaypoint) +
+                FastBufferWriter.GetWriteSize (m_ActiveCharacterCount) +
+                FastBufferWriter.GetWriteSize (m_TargetPosition) +
+                FastBufferWriter.GetWriteSize (m_Transform.position) +
+                FastBufferWriter.GetWriteSize (m_TargetRotation) +
+                FastBufferWriter.GetWriteSize (m_OriginalRotation) +
+                FastBufferWriter.GetWriteSize (m_Transform.rotation),
+                Allocator.Temp)) {
+                BytePacker.WriteValuePacked (writer, m_MoveTime);
+                BytePacker.WriteValuePacked (writer, nextWaypointEventDelay);
+                BytePacker.WriteValuePacked (writer, m_NextWaypointDistance);
+                BytePacker.WriteValuePacked (writer, activeStates);
+                BytePacker.WriteValuePacked (writer, m_NextWaypoint);
+                BytePacker.WriteValuePacked (writer, (int) m_Direction);
+                BytePacker.WriteValuePacked (writer, m_PreviousWaypoint);
+                BytePacker.WriteValuePacked (writer, m_ActiveCharacterCount);
+                BytePacker.WriteValuePacked (writer, m_TargetPosition);
+                BytePacker.WriteValuePacked (writer, m_Transform.position);
+                BytePacker.WriteValuePacked (writer, m_TargetRotation);
+                BytePacker.WriteValuePacked (writer, m_OriginalRotation);
+                BytePacker.WriteValuePacked (writer, m_Transform.rotation);
+                m_CustomMessagingManager.SendNamedMessage (m_MsgName, id, writer);
             }
         }
         /// <summary>

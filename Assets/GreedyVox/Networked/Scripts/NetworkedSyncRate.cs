@@ -1,6 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
-using MLAPI;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -28,7 +28,7 @@ namespace GreedyVox.Networked {
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
         /// </summary>
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
             m_DistanceSendrate = 1.0f / m_FixedSendsPerSecond;
             if (IsServer) {
                 StartCoroutine (NetworkTimerServer ());

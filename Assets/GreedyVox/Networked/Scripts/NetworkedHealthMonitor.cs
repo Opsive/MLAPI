@@ -1,12 +1,10 @@
 ﻿using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Messaging;
-using MLAPI.Spawning;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Networking.Game;
 using Opsive.UltimateCharacterController.Networking.Traits;
 using Opsive.UltimateCharacterController.Objects;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -27,7 +25,7 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GamingObject = gameObject;
-            m_NetworkObjects = NetworkSpawnManager.SpawnedObjects;
+            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
             m_Settings = NetworkedManager.Instance.NetworkSettings;
             m_Health = m_GamingObject.GetCachedComponent<Health> ();
         }

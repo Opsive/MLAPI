@@ -1,7 +1,6 @@
-﻿using MLAPI;
-using MLAPI.Messaging;
-using Opsive.UltimateCharacterController.Networking.Objects;
+﻿using Opsive.UltimateCharacterController.Networking.Objects;
 using Opsive.UltimateCharacterController.Objects;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>

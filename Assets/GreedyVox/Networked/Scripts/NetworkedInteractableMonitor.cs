@@ -1,10 +1,8 @@
 ﻿using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Messaging;
-using MLAPI.Spawning;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Networking.Traits;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -21,7 +19,7 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GameObject = gameObject;
-            m_NetworkObjects = NetworkSpawnManager.SpawnedObjects;
+            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
             m_Settings = NetworkedManager.Instance.NetworkSettings;
             m_Interactable = m_GameObject.GetCachedComponent<Interactable> ();
         }

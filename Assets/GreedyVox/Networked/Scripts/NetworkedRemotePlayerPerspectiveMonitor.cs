@@ -1,10 +1,10 @@
-﻿using MLAPI;
-using Opsive.Shared.Events;
+﻿using Opsive.Shared.Events;
 using Opsive.UltimateCharacterController.Camera;
 using Opsive.UltimateCharacterController.Character;
 using Opsive.UltimateCharacterController.Character.Identifiers;
 using Opsive.UltimateCharacterController.Networking;
 using Opsive.UltimateCharacterController.ThirdPersonController.Character;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -69,7 +69,8 @@ namespace GreedyVox.Networked {
         /// <summary>
         /// The object has been destroyed.
         /// </summary>
-        private void OnDestroy () {
+        public override void OnDestroy () {
+            base.OnDestroy ();
             if (m_GameObject != null) {
                 EventHandler.UnregisterEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", OnAttachLookSource);
             }

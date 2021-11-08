@@ -1,7 +1,4 @@
 ﻿using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Messaging;
-using MLAPI.Spawning;
 using Opsive.Shared.Events;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Camera;
@@ -14,6 +11,7 @@ using Opsive.UltimateCharacterController.Items.Actions;
 using Opsive.UltimateCharacterController.Items.Actions.PerspectiveProperties;
 using Opsive.UltimateCharacterController.Networking.Character;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -33,7 +31,7 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GameObject = gameObject;
-            m_NetworkObjects = NetworkSpawnManager.SpawnedObjects;
+            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
             m_Inventory = m_GameObject.GetCachedComponent<InventoryBase> ();
             m_CharacterLocomotion = m_GameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
         }
@@ -51,7 +49,8 @@ namespace GreedyVox.Networked {
         /// <summary>
         /// The character has been destroyed.
         /// </summary>
-        private void OnDestroy () {
+        public override void OnDestroy () {
+            base.OnDestroy ();
             EventHandler.ExecuteEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", null);
             EventHandler.UnregisterEvent<Ability, bool> (m_GameObject, "OnCharacterAbilityActive", AbilityActive);
             EventHandler.UnregisterEvent<ItemAbility, bool> (m_GameObject, "OnCharacterItemAbilityActive", ItemAbilityActive);
@@ -63,7 +62,7 @@ namespace GreedyVox.Networked {
                 }
             }
         }
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
             // Notify the joining player of the ItemIdentifiers that the player has within their inventory.
             if (m_Inventory != null) {
                 var items = m_Inventory.GetAllItems ();
@@ -113,17 +112,17 @@ namespace GreedyVox.Networked {
             for (int i = 0; i < m_CharacterLocomotion.ActiveAbilityCount; i++) {
                 var activeAbility = m_CharacterLocomotion.ActiveAbilities[i];
                 if (IsServer) {
-                    StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Create (activeAbility.GetNetworkStartData ()));
+                    StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serializer (activeAbility.GetNetworkStartData ()));
                 } else {
-                    StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Create (activeAbility.GetNetworkStartData ()));
+                    StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Serializer (activeAbility.GetNetworkStartData ()));
                 }
             }
             for (int i = 0; i < m_CharacterLocomotion.ActiveItemAbilityCount; i++) {
                 var activeItemAbility = m_CharacterLocomotion.ActiveItemAbilities[i];
                 if (IsServer) {
-                    // StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Create (activeItemAbility.GetNetworkStartData ()));
+                    StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (activeItemAbility.GetNetworkStartData ()));
                 } else {
-                    StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Create (activeItemAbility.GetNetworkStartData ()));
+                    StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (activeItemAbility.GetNetworkStartData ()));
                 }
             }
 #endif
@@ -211,8 +210,8 @@ namespace GreedyVox.Networked {
         private void StartAbilityRpc (int abilityIndex, SerializableObjectArray startData) {
             var ability = m_CharacterLocomotion.Abilities[abilityIndex];
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
-            if (startData.Value != null) {
-                ability.SetNetworkStartData (startData.Value);
+            if (startData != null) {
+                ability.SetNetworkStartData (DeserializerObjectArray.Deserializer (startData));
             }
 #endif
             m_CharacterLocomotion.TryStartAbility (ability, true, true);
@@ -236,8 +235,8 @@ namespace GreedyVox.Networked {
         private void StartItemAbilityRpc (int itemAbilityIndex, SerializableObjectArray startData) {
             var itemAbility = m_CharacterLocomotion.ItemAbilities[itemAbilityIndex];
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
-            if (startData.Value != null) {
-                itemAbility.SetNetworkStartData (startData.Value);
+            if (startData != null) {
+                itemAbility.SetNetworkStartData (DeserializerObjectArray.Deserializer (startData));
             }
 #endif
             m_CharacterLocomotion.TryStartAbility (itemAbility, true, true);
@@ -725,7 +724,7 @@ namespace GreedyVox.Networked {
                 // Retrieve the hit character before getting the hit GameObject so RetrieveGameObject will know the parent GameObject (if it exists).
                 UltimateCharacterLocomotion characterLocomotion = null;
                 if (hitCharacterLocomotionViewID != -1) {
-                    if (NetworkSpawnManager.SpawnedObjects.TryGetValue ((ulong) hitCharacterLocomotionViewID, out var obj)) {
+                    if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue ((ulong) hitCharacterLocomotionViewID, out var obj)) {
                         characterLocomotion = obj.gameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
                     }
                 }
@@ -1094,7 +1093,7 @@ namespace GreedyVox.Networked {
         /// <param name="force">The amount of force to apply.</param>
         /// <param name="point">The point at which to apply the push force.</param>
         private void PushRigidbodyRpc (ulong rigidbodyNetworkObjectId, Vector3 force, Vector3 point) {
-            if (NetworkSpawnManager.SpawnedObjects.TryGetValue ((ulong) rigidbodyNetworkObjectId, out var obj)) {
+            if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue ((ulong) rigidbodyNetworkObjectId, out var obj)) {
                 var targetRigidbody = obj.gameObject.GetComponent<Rigidbody> ();
                 if (targetRigidbody != null) {
                     targetRigidbody.AddForceAtPosition (force, point, ForceMode.VelocityChange);

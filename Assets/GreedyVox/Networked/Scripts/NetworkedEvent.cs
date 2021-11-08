@@ -1,6 +1,5 @@
 ﻿using System.Collections;
-using MLAPI;
-using MLAPI.Transports;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -9,23 +8,29 @@ using UnityEngine;
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedEvent : NetworkBehaviour {
-        public EventNetworkStart NetworkStartEvent;
-        public delegate void EventNetworkStart ();
+        public EventNetworkSpawn NetworkSpawnEvent;
+        public delegate void EventNetworkSpawn ();
+        public EventNetworkDespawn NetworkDespawnEvent;
+        public delegate void EventNetworkDespawn ();
         private ulong m_ServerID;
         private NetworkTransport m_Transport;
         private Coroutine m_Coroutine;
+        private void OnDisable () {
+            NetworkSpawnEvent = null;
+            NetworkDespawnEvent = null;
+        }
         /// <summary>
         /// The player connection disconnected.
         /// </summary>
-        private void OnDestroy () {
-            NetworkStartEvent = null;
+        public override void OnNetworkDespawn () {
+            if (NetworkDespawnEvent != null) { NetworkDespawnEvent (); }
         }
         /// <summary>
-        /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
+        /// Gets called when message handlers are ready to be registered and the networking is setup.
         /// </summary>
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
+            if (NetworkSpawnEvent != null) { NetworkSpawnEvent (); }
             m_ServerID = NetworkManager.Singleton.ServerClientId;
-            if (NetworkStartEvent != null) { NetworkStartEvent (); }
             m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
             if (IsLocalPlayer && m_Transport != null && m_Coroutine == null) {
                 m_Coroutine = StartCoroutine (NetworkTimer ());

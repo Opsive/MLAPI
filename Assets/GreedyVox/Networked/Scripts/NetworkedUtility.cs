@@ -1,9 +1,8 @@
 ﻿using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Spawning;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Inventory;
 using Opsive.UltimateCharacterController.Objects;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -94,7 +93,7 @@ namespace GreedyVox.Networked {
                 ObjectIdentifier objectIdentifier = null;
                 if (!idObjectIDMap.TryGetValue (id, out objectIdentifier)) {
                     // The ID doesn't exist in the cache. Try to find the object.
-                    NetworkSpawnManager.SpawnedObjects.TryGetValue (id, out var hitPhotonView);
+                    NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue (id, out var hitPhotonView);
                     if (hitPhotonView != null) {
                         gameObject = hitPhotonView.gameObject;
                     } else {

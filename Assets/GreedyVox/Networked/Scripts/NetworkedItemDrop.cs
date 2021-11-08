@@ -1,19 +1,24 @@
-﻿using System.IO;
-using MLAPI;
+﻿using GreedyVox.Networked.Data;
 using Opsive.Shared.Events;
+using Unity.Netcode;
 
 namespace GreedyVox.Networked {
     public class NetworkedItemDrop : NetworkBehaviour {
-        private ISpawnDataObject m_SpawnData;
+        private IPayload m_Payload;
         private void Awake () {
-            m_SpawnData = GetComponent<ISpawnDataObject> ();
+            m_Payload = GetComponent<IPayload> ();
         }
         private void Start () {
+            m_Payload?.Load ();
             EventHandler.ExecuteEvent (gameObject, "OnWillRespawn");
         }
-        public override void NetworkStart (Stream stream) {
+        public override void OnNetworkSpawn () {
             EventHandler.ExecuteEvent (gameObject, "OnRespawn");
-            m_SpawnData?.ObjectSpawned (stream, gameObject);
+        }
+        public void NetworkedVariable<T> (T value) where T : unmanaged {
+            new NetworkVariable<T> (value).OnValueChanged += (T o, T n) => {
+                m_Payload?.Unload (n, gameObject);
+            };
         }
     }
 }

@@ -1,6 +1,6 @@
 using BehaviorDesigner.Runtime;
-using MLAPI;
 using Opsive.UltimateCharacterController.Character;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -15,7 +15,7 @@ namespace GreedyVox.Networked {
             m_BehaviorTree = GetComponent<BehaviorTree> ();
             m_Locomotion = GetComponent<UltimateCharacterLocomotion> ();
         }
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
             if (m_Locomotion != null) { m_Locomotion.enabled = IsServer; }
             if (m_BehaviorTree != null) { m_BehaviorTree.enabled = IsServer; }
         }

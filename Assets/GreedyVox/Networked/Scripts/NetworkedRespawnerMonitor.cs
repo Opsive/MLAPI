@@ -1,8 +1,7 @@
-﻿using MLAPI;
-using MLAPI.Messaging;
-using Opsive.Shared.Game;
+﻿using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Networking.Traits;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>

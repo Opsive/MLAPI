@@ -1,4 +1,4 @@
-﻿using MLAPI;
+﻿using Unity.Netcode;
 using UnityEngine;
 
 namespace GreedyVox.Networked {
@@ -31,12 +31,14 @@ namespace GreedyVox.Networked {
 
             Connection.OnClientDisconnectCallback += ID => {
                 m_NetworkSettings.PlayDisconnect (m_AudioSource);
+                NetworkLog.LogInfoServer ("<color=white>Client Disconnected</color>");
                 Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red>{0}</color></b>]</color>", ID);
             };
 
             Connection.OnClientConnectedCallback += ID => {
                 m_NetworkSettings.PlayConnect (m_AudioSource);
                 var client = Connection.ConnectedClients[ID];
+                NetworkLog.LogInfoServer ("<color=white>Client Connected</color>");
                 Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", client, ID);
             };
         }

@@ -1,28 +1,23 @@
-using MLAPI;
-using MLAPI.Spawning;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace GreedyVox.Networked {
-    [DisallowMultipleComponent]
-    public class NetworkedSpawnManager : NetworkBehaviour {
-        public override void NetworkStart () {
-            if (!NetworkManager.Singleton.IsServer) {
-                GameObject go;
-                foreach (var fab in NetworkManager.Singleton.NetworkConfig.NetworkPrefabs) {
-                    if (!fab.PlayerPrefab) {
-                        NetworkSpawnManager.RegisterDestroyHandler (NetworkSpawnManager.GetPrefabHashFromGenerator (fab?.Prefab.name), (net) => {
-                            NetworkedObjectPool.Destroy (net?.gameObject);
-                        });
-                        NetworkSpawnManager.RegisterSpawnHandler (NetworkSpawnManager.GetPrefabHashFromGenerator (fab?.Prefab.name), (pos, rot) => {
-                            go = ObjectPool.Instantiate (fab?.Prefab, pos, rot, transform);
-                            go?.GetComponent<CharacterRespawner> ()?.Respawn (pos, rot, true);
-                            return go?.GetComponent<NetworkObject> ();
-                        });
-                    }
-                }
-            }
+    public class NetworkedSpawnManager : INetworkPrefabInstanceHandler {
+        private GameObject m_Prefab;
+        private Transform m_Transform;
+        public NetworkedSpawnManager (GameObject fab, Transform tran = null) {
+            m_Prefab = fab;
+            m_Transform = tran;
+        }
+        public void Destroy (NetworkObject net) {
+            NetworkedObjectPool.Destroy (net?.gameObject);
+        }
+        public NetworkObject Instantiate (ulong ID, Vector3 pos, Quaternion rot) {
+            var go = ObjectPool.Instantiate (m_Prefab, pos, rot, m_Transform);
+            go?.GetComponent<CharacterRespawner> ()?.Respawn (pos, rot, true);
+            return go?.GetComponent<NetworkObject> ();
         }
     }
 }

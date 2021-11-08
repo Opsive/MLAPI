@@ -1,5 +1,4 @@
-﻿using System.IO;
-using MLAPI.Serialization.Pooled;
+﻿using GreedyVox.Networked.Data;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Objects;
 using UnityEngine;
@@ -9,41 +8,46 @@ using UnityEngine;
 /// </summary>
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
-    public class NetworkedGrenado : Grenade, ISpawnDataObject {
+    public class NetworkedGrenado : Grenade, IPayload {
+        private NetworkedItemDrop m_ItemDrop;
+        protected override void Awake () {
+            base.Awake ();
+            m_ItemDrop = gameObject.GetCachedComponent<NetworkedItemDrop> ();
+        }
         /// <summary>
-        /// Returns the initialization data that is required when the object spawns. This allows the remote players to initialize the object correctly.
+        /// Initialization data that is required when the object spawns. This allows the remote players to initialize the object correctly.
         /// </summary>
-        /// <returns>The initialization data that is required when the object spawns.</returns>
-        public void SpawnData (PooledNetworkWriter writer) {
-            writer.WriteVector3Packed (m_Velocity);
-            writer.WriteVector3Packed (m_Torque);
-            writer.WriteSinglePacked (m_DamageAmount);
-            writer.WriteSinglePacked (m_ImpactForce);
-            writer.WriteInt32Packed (m_ImpactForceFrames);
-            writer.WriteInt32Packed (m_ImpactLayers.value);
-            writer.WriteStringPacked (m_ImpactStateName);
-            writer.WriteSinglePacked (m_ImpactStateDisableTimer);
-            writer.WriteSinglePacked (m_ScheduledDeactivation != null ? (m_ScheduledDeactivation.EndTime - Time.time) : -1);
+        public void Load () {
+            m_ItemDrop?.NetworkedVariable<PayloadGrenado> (new PayloadGrenado () {
+                ImpactStateName = m_ImpactStateName,
+                    Velocity = m_Velocity,
+                    Torque = m_Torque,
+                    ImpactFrames = m_ImpactForceFrames,
+                    ImpactLayers = m_ImpactLayers,
+                    ImpactForce = m_ImpactForce,
+                    DamageAmount = m_DamageAmount,
+                    ImpactStateDisableTimer = m_ImpactStateDisableTimer,
+                    ScheduledDeactivation = m_ScheduledDeactivation != null ?
+                    (m_ScheduledDeactivation.EndTime - Time.time) : -1
+            });
         }
         /// <summary>
         /// The object has been spawned. Initialize the grenade.
         /// </summary>
-        public void ObjectSpawned (Stream stream, GameObject go) {
-            // Initialize the grenade from the data within the InitializationData field.
-            using (PooledNetworkReader reader = PooledNetworkReader.Get (stream)) {
-                Initialize (
-                    reader.ReadVector3Packed (),
-                    reader.ReadVector3Packed (),
-                    reader.ReadSinglePacked (),
-                    reader.ReadSinglePacked (),
-                    reader.ReadInt32Packed (),
-                    reader.ReadInt32Packed (),
-                    reader.ReadStringPacked ().ToString (),
-                    reader.ReadSinglePacked (),
+        public void Unload<T> (T val, GameObject go) where T : unmanaged {
+            PayloadGrenado? dat = val as PayloadGrenado?;
+            if (dat != null) {
+                Initialize (dat.Value.Velocity,
+                    dat.Value.Torque,
+                    dat.Value.DamageAmount,
+                    dat.Value.ImpactForce,
+                    dat.Value.ImpactFrames,
+                    dat.Value.ImpactLayers,
+                    dat.Value.ImpactStateName,
+                    dat.Value.ImpactStateDisableTimer,
                     null, go, false);
-
                 // The grenade should start cooking.
-                var deactivationTime = reader.ReadSinglePacked ();
+                var deactivationTime = dat.Value.ScheduledDeactivation;
                 if (deactivationTime > 0) {
                     m_ScheduledDeactivation = Scheduler.Schedule (deactivationTime, Deactivate);
                 }
