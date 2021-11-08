@@ -1,5 +1,5 @@
 # MLAPI
-WIP for Opsive Character Controller networked using the Unity MLAPI
+WIP for Opsive Character Controller networked using the Unity Netcode for GameObjects.
 
 <h3>Project Setup</h3><img src='https://user-images.githubusercontent.com/69744813/140709420-5cc80801-fef9-4afa-bf31-6b57fb94b470.png' alt="project"></img>
 
