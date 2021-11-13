@@ -1,4 +1,5 @@
-﻿using Opsive.Shared.Events;
+﻿using System.Collections.Generic;
+using Opsive.Shared.Events;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Character;
 using Unity.Collections;
@@ -30,6 +31,7 @@ namespace GreedyVox.Networked {
         private GameObject m_GameObject;
         private ILookSource m_LookSource;
         private bool m_InitialSync = true;
+        private IReadOnlyList<ulong> m_Clients;
         private NetworkedManager m_NetworkManager;
         private FastBufferWriter m_FastBufferWriter;
         private string m_MsgNameClient, m_MsgNameServer;
@@ -52,6 +54,7 @@ namespace GreedyVox.Networked {
             m_GameObject = gameObject;
             m_MaxBufferSize = MaxBufferSize ();
             m_NetworkManager = NetworkedManager.Instance;
+            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_NetworkLookPosition = m_NetworkTargetLookPosition = m_Transform.position;
             m_NetworkLookDirection = m_NetworkTargetLookDirection = m_Transform.forward;
@@ -138,7 +141,7 @@ namespace GreedyVox.Networked {
                 } else {
                     SerializeView (ref m_Flag);
                 }
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, null, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
             }
         }
         /// <summary>
@@ -206,7 +209,7 @@ namespace GreedyVox.Networked {
                     m_Flag |= (byte) TransformDirtyFlags.Pitch;
                     m_NetworkPitch = m_LookSource.Pitch;
                 }
-                var lookPosition = m_LookSource.LookPosition ();
+                var lookPosition = m_LookSource.LookPosition (true);
                 if (m_NetworkLookPosition != lookPosition) {
                     m_Flag |= (byte) TransformDirtyFlags.LookPosition;
                     m_NetworkLookPosition = lookPosition;
@@ -238,8 +241,9 @@ namespace GreedyVox.Networked {
         /// <summary>
         /// Returns the position of the look source.
         /// </summary>
+        /// <param name="characterLookPosition">Is the character look position being retrieved?</param>
         /// <returns>The position of the look source.</returns>
-        public Vector3 LookPosition () {
+        public Vector3 LookPosition (bool characterLookPosition) {
             return m_NetworkLookPosition;
         }
         /// <summary>

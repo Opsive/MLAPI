@@ -39,6 +39,7 @@ namespace GreedyVox.Networked {
             if (dat != null) {
                 Initialize (dat.Value.Velocity,
                     dat.Value.Torque,
+                    m_DamageProcessor,
                     dat.Value.DamageAmount,
                     dat.Value.ImpactForce,
                     dat.Value.ImpactFrames,

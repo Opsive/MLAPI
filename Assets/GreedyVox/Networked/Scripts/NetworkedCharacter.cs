@@ -426,7 +426,7 @@ namespace GreedyVox.Networked {
 
         [ClientRpc]
         private void ItemIdentifierPickupClientRpc (uint itemIdentifierID, int amount, int slotID, bool immediatePickup, bool forceEquip) {
-            ItemIdentifierPickupRpc (itemIdentifierID, amount, slotID, immediatePickup, forceEquip);
+            if (!IsHost) { ItemIdentifierPickupRpc (itemIdentifierID, amount, slotID, immediatePickup, forceEquip); }
         }
         /// <summary>
         /// Removes all of the items from the inventory.

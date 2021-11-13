@@ -1,4 +1,5 @@
-﻿using Opsive.Shared.Events;
+﻿using System.Collections.Generic;
+using Opsive.Shared.Events;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Character;
 using Opsive.UltimateCharacterController.Utility;
@@ -32,6 +33,7 @@ namespace GreedyVox.Networked {
         private NetworkObject m_Platform;
         private NetworkedInfo m_NetworkInfo;
         private NetworkTransport m_Transport;
+        private IReadOnlyList<ulong> m_Clients;
         private ulong m_PlatformID, m_ServerID;
         private NetworkedManager m_NetworkManager;
         private FastBufferWriter m_FastBufferWriter;
@@ -52,6 +54,7 @@ namespace GreedyVox.Networked {
             m_NetworkPosition = m_Transform.position;
             m_NetworkRotation = m_Transform.rotation;
             m_NetworkManager = NetworkedManager.Instance;
+            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_NetworkInfo = gameObject.GetCachedComponent<NetworkedInfo> ();
             m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
@@ -130,7 +133,7 @@ namespace GreedyVox.Networked {
                 } else {
                     Serialize (ref m_Flag);
                 }
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, null, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
             }
         }
         /// <summary>

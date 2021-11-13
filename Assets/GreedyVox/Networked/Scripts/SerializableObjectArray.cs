@@ -4,10 +4,7 @@ namespace GreedyVox.Networked {
     public class SerializableObjectArray : INetworkSerializable {
         public SerializableObject[] Value;
         public void NetworkSerialize<T> (BufferSerializer<T> serializer) where T : IReaderWriter {
-            var length = 0;
-            if (serializer.IsWriter) {
-                length = Value.Length;
-            }
+            var length = serializer.IsReader ? 0 : Value.Length;
             serializer.SerializeValue (ref length);
             if (serializer.IsReader) {
                 Value = new SerializableObject[length];

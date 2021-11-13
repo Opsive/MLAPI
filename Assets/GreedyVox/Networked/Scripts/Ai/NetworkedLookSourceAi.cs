@@ -166,7 +166,7 @@ namespace GreedyVox.Networked.Ai {
                     m_Flag |= (byte) TransformDirtyFlags.Pitch;
                     m_NetworkPitch = m_LookSource.Pitch;
                 }
-                var lookPosition = m_LookSource.LookPosition ();
+                var lookPosition = m_LookSource.LookPosition (true);
                 if (m_NetworkLookPosition != lookPosition) {
                     m_Flag |= (byte) TransformDirtyFlags.LookPosition;
                     m_NetworkLookPosition = lookPosition;
@@ -199,8 +199,9 @@ namespace GreedyVox.Networked.Ai {
         /// <summary>
         /// Returns the position of the look source.
         /// </summary>
+        /// <param name="characterLookPosition">Is the character look position being retrieved?</param>
         /// <returns>The position of the look source.</returns>
-        public Vector3 LookPosition () {
+        public Vector3 LookPosition (bool characterLookPosition) {
             return m_NetworkLookPosition;
         }
         /// <summary>

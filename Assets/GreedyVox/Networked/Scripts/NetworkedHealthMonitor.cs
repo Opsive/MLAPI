@@ -1,9 +1,11 @@
 ﻿using System.Collections.Generic;
 using Opsive.Shared.Game;
+using Opsive.Shared.Utility;
 using Opsive.UltimateCharacterController.Networking.Game;
 using Opsive.UltimateCharacterController.Networking.Traits;
 using Opsive.UltimateCharacterController.Objects;
 using Opsive.UltimateCharacterController.Traits;
+using Opsive.UltimateCharacterController.Traits.Damage;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -69,13 +71,13 @@ namespace GreedyVox.Networked {
         /// <param name="radius">The radius of the explosive damage. If 0 then a non-explosive force will be used.</param>
         /// <param name="attacker">The GameObject that did the damage.</param>
         /// <param name="collider">The Collider that was hit.</param>
-        public void OnDamage (float amount, Vector3 position, Vector3 direction, float magnitude, int frames, float radius, GameObject attacker, Collider collider) {
+        public void OnDamage (float amount, Vector3 position, Vector3 direction, float magnitude, int frames, float radius, IDamageOriginator attacker, Collider collider) {
             // An attacker is not required. If one exists it must have a NetworkObject component attached for identification purposes.
             var attackerID = -1L;
             if (attacker != null) {
-                var attackerObject = attacker.GetCachedComponent<NetworkObject> ();
+                var attackerObject = attacker.Owner.GetCachedComponent<NetworkObject> ();
                 if (attackerObject == null) {
-                    Debug.LogError ("Error: The attacker " + attacker.name + " must have a NetworkObject component.");
+                    Debug.LogError ("Error: The attacker " + attacker.Owner.name + " must have a NetworkObject component.");
                     return;
                 }
                 attackerID = (long) attackerObject.NetworkObjectId;
@@ -105,16 +107,17 @@ namespace GreedyVox.Networked {
         /// <param name="hitID">The NetworkObject or ObjectIdentifier ID of the Collider that was hit.</param>
         /// <param name="hitSlotID">If the hit collider is an item then the slot ID of the item will be specified.</param>
         private void DamageRpc (float amount, Vector3 position, Vector3 direction, float magnitude, int frames, float radius, long attackerID, long hitID, int hitSlotID) {
-            GameObject attacker = null;
+            IDamageOriginator attacker = null;
             if (attackerID != -1) {
                 if (m_NetworkObjects.TryGetValue ((ulong) attackerID, out var obj)) {
-                    attacker = obj.gameObject;
+                    attacker = obj.gameObject?.GetComponent<IDamageOriginator> ();
                 }
             }
             var collider = NetworkedUtility.RetrieveGameObject (m_GamingObject, (ulong) hitID, hitSlotID);
-            m_Health.OnDamage (amount, position, direction, magnitude, frames, radius,
-                attacker != null ? attacker.gameObject : null, null,
-                collider != null ? collider.GetCachedComponent<Collider> () : null);
+            var data = GenericObjectPool.Get<DamageData> ();
+            data?.SetDamage (attacker, amount, position, direction, magnitude, frames, radius, collider?.GetCachedComponent<Collider> ());
+            m_Health?.OnDamage (data);
+            GenericObjectPool.Return (data);
         }
 
         [ServerRpc (RequireOwnership = false)]

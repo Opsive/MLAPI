@@ -1,4 +1,5 @@
-﻿using Opsive.UltimateCharacterController.Character;
+﻿using System.Collections.Generic;
+using Opsive.UltimateCharacterController.Character;
 using Opsive.UltimateCharacterController.Networking;
 using Unity.Collections;
 using Unity.Netcode;
@@ -28,6 +29,7 @@ namespace GreedyVox.Networked {
         }
         private INetworkInfo m_NetworkInfo;
         private NetworkedEvent m_NetworkEvent;
+        private IReadOnlyList<ulong> m_Clients;
         private NetworkedManager m_NetworkManager;
         private FastBufferWriter m_FastBufferWriter;
         private int m_SnappedAbilityIndex = -1;
@@ -42,7 +44,7 @@ namespace GreedyVox.Networked {
         private float m_NetworkAbilityFloatData;
         private ulong m_ServerID;
         private string m_MsgServerPara, m_MsgServerItems;
-        private string m_MsgClientAnima, m_MsgServerAnima;
+        private string m_MsgNameClient, m_MsgNameServer;
         private CustomMessagingManager m_CustomMessagingManager;
         protected override void Awake () {
             base.Awake ();
@@ -50,6 +52,8 @@ namespace GreedyVox.Networked {
             m_NetworkManager = NetworkedManager.Instance;
             m_NetworkInfo = GetComponent<INetworkInfo> ();
             m_NetworkEvent = GetComponent<NetworkedEvent> ();
+            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
+
             m_NetworkEvent.NetworkSpawnEvent += OnNetworkSpawnEvent;
             m_NetworkEvent.NetworkDespawnEvent += OnNetworkDespawnEvent;
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
@@ -73,8 +77,8 @@ namespace GreedyVox.Networked {
         private void OnNetworkDespawnEvent () {
             m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgServerPara);
             m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgServerItems);
-            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgClientAnima);
-            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgServerAnima);
+            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgNameClient);
+            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgNameServer);
             m_NetworkManager.NetworkSettings.NetworkSyncServerEvent -= OnNetworkSyncServerEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncClientEvent -= OnNetworkSyncClientEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
@@ -86,8 +90,8 @@ namespace GreedyVox.Networked {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
             m_MsgServerPara = $"{m_NetworkEvent.NetworkObjectId}MsgServerPara{m_NetworkEvent.OwnerClientId}";
             m_MsgServerItems = $"{m_NetworkEvent.NetworkObjectId}MsgServerItems{m_NetworkEvent.OwnerClientId}";
-            m_MsgClientAnima = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{m_NetworkEvent.OwnerClientId}";
-            m_MsgServerAnima = $"{m_NetworkEvent.NetworkObjectId}MsgServerAnima{m_NetworkEvent.OwnerClientId}";
+            m_MsgNameClient = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{m_NetworkEvent.OwnerClientId}";
+            m_MsgNameServer = $"{m_NetworkEvent.NetworkObjectId}MsgServerAnima{m_NetworkEvent.OwnerClientId}";
 
             if (m_NetworkInfo.IsServer ()) {
                 m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
@@ -98,7 +102,7 @@ namespace GreedyVox.Networked {
             if (!m_NetworkEvent.IsOwner) {
                 m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent;
                 if (m_NetworkInfo.IsServer ()) {
-                    m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgServerAnima, (sender, reader) => {
+                    m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgNameServer, (sender, reader) => {
                         SynchronizeParameters (ref reader);
                     });
                     m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgServerPara, (sender, reader) => {
@@ -108,18 +112,18 @@ namespace GreedyVox.Networked {
                         InitializeItemParameters (ref reader);
                     });
                 } else {
-                    m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgClientAnima, (sender, reader) => {
+                    m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgNameClient, (sender, reader) => {
                         SynchronizeParameters (ref reader);
                     });
                 }
             } else if (m_NetworkInfo.IsLocalPlayer ()) {
-                using (m_FastBufferWriter = new FastBufferWriter (0, Allocator.Temp, m_MaxBufferSize)) {
+                using (m_FastBufferWriter = new FastBufferWriter (1, Allocator.Temp, m_MaxBufferSize)) {
                     InitializeParameters ();
                     m_CustomMessagingManager.SendNamedMessage (m_MsgServerPara, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
                 }
                 if (HasItemParameters) {
                     for (int i = 0; i < ParameterSlotCount; i++) {
-                        using (m_FastBufferWriter = new FastBufferWriter (0, Allocator.Temp, m_MaxBufferSize)) {
+                        using (m_FastBufferWriter = new FastBufferWriter (1, Allocator.Temp, m_MaxBufferSize)) {
                             InitializeItemParameters (i);
                             m_CustomMessagingManager.SendNamedMessage (m_MsgServerItems, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
                         }
@@ -140,7 +144,7 @@ namespace GreedyVox.Networked {
         private void OnNetworkSyncClientEvent () {
             using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_DirtyFlag), Allocator.Temp, m_MaxBufferSize)) {
                 SynchronizeParameters ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgServerAnima, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
             }
         }
         /// <summary>
@@ -149,7 +153,7 @@ namespace GreedyVox.Networked {
         private void OnNetworkSyncServerEvent () {
             using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_DirtyFlag), Allocator.Temp, m_MaxBufferSize)) {
                 SynchronizeParameters ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgClientAnima, null, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
             }
         }
         /// <summary>
