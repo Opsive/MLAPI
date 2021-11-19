@@ -11,18 +11,21 @@ namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedObjectPool : NetworkObjectPool {
         [SerializeField] private NetworkedMessenger m_NetworkedMessenger = default;
-        [SerializeField] private HashSet<GameObject> m_SpawnableGameObjects = new HashSet<GameObject> ();
         [Tooltip ("An array of objects that can be spawned over the network. Any object that can be spawned on the network must be within this list.")]
+        [SerializeField] private HashSet<GameObject> m_SpawnableGameObjects = new HashSet<GameObject> ();
         private NetworkObject m_NetworkObject;
-        // private NetworkedSettingsAbstract m_Settings;
         private HashSet<GameObject> m_ActiveGameObjects = new HashSet<GameObject> ();
         private HashSet<GameObject> m_SpawnedGameObjects = new HashSet<GameObject> ();
         private Dictionary<string, GameObject> m_ResourceCache = new Dictionary<string, GameObject> ();
         /// Initialize the default values.
         /// </summary>
         private void Start () {
-            foreach (var go in m_SpawnableGameObjects) {
-                if (go != null) {
+            GameObject go;
+            var pool = FindObjectOfType<ObjectPool> ()?.PreloadedPrefabs;
+            for (int i = 0; i < pool?.Length; i++) {
+                go = pool[i].Prefab;
+                if (go != null && go.GetComponent<NetworkObject> () != null) {
+                    m_SpawnableGameObjects.Add (go);
                     NetworkManager.Singleton.PrefabHandler.AddHandler (go,
                         new NetworkedSpawnManager (go, transform));
                 }
