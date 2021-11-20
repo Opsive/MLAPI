@@ -1,10 +1,21 @@
-# MLAPI
+# Netcode for GameObjects
 WIP for Opsive Character Controller networked using the Unity Netcode for GameObjects.
 
 <h3>Project Setup</h3><img src='https://user-images.githubusercontent.com/69744813/140709420-5cc80801-fef9-4afa-bf31-6b57fb94b470.png' alt="project"></img>
 
 <h3>Tools => GreedyVox => NetworkedPlayerInspector</h3>
 Setting up the player UCC prefab, use the tool menu to open up the dialog box, drag the Player prefab into the input field and than hit the Update Character button.
+
+<h3>Object Pooling</h3><img src='https://user-images.githubusercontent.com/69744813/142705570-e0707d80-0df2-47bd-a097-65f56fa5947e.png' alt="pooling"></img>
+All prefabs assigned to he UCC Object Pool will automatically be pooled with the Networked Object Pool, when using the interface for spawning the prefabs over the network.
+
+```
+m_SpawnObject = ObjectPool.Instantiate (m_CloneObject, Vector3.zero, Quaternion.identity);
+NetworkedObjectPool.NetworkSpawn (m_CloneObject, m_SpawnObject, true);
+```
+
+<h3>Networked Pooling</h3><img src='https://user-images.githubusercontent.com/69744813/142705903-6912521e-5aaa-41d3-804f-670a5b062375.png' alt="spawning"></img>
+Provides built-in support for Object Pooling, allows to override the default Netcode destroy and spawn handlers, for storing destroyed network objects in a pool for reuse.
 
 <h3>Tool Setup</h3><img src='https://user-images.githubusercontent.com/69744813/140706499-77f2d1de-05ec-468e-9f92-7c4e30696076.png' alt="tool"></img>
 
