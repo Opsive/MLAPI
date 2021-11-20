@@ -54,7 +54,6 @@ namespace GreedyVox.Networked.Ai {
             m_NetworkRotation = m_Transform.rotation;
             m_NetworkManager = NetworkedManager.Instance;
             m_NetworkSync = gameObject.GetCachedComponent<NetworkedSyncRate> ();
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_CharacterLocomotion = gameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
 
             EventHandler.RegisterEvent (gameObject, "OnRespawn", OnRespawn);
@@ -82,6 +81,7 @@ namespace GreedyVox.Networked.Ai {
         public override void OnNetworkSpawn () {
             m_NetworkSync.NetworkSyncEvent += OnNetworkSyncEvent;
             m_MsgName = $"{NetworkObjectId}MsgClientTransformAi{OwnerClientId}";
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             if (!IsServer) {
                 if (m_NetworkManager != null) { m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent; }
@@ -94,7 +94,7 @@ namespace GreedyVox.Networked.Ai {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 4;
+            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 5;
         }
         /// <summary>
         /// Network broadcast event called from the NetworkedSyncRate component

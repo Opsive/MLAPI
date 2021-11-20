@@ -54,8 +54,6 @@ namespace GreedyVox.Networked {
             m_GameObject = gameObject;
             m_MaxBufferSize = MaxBufferSize ();
             m_NetworkManager = NetworkedManager.Instance;
-            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_NetworkLookPosition = m_NetworkTargetLookPosition = m_Transform.position;
             m_NetworkLookDirection = m_NetworkTargetLookDirection = m_Transform.forward;
             m_CharacterLocomotion = m_GameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
@@ -90,12 +88,14 @@ namespace GreedyVox.Networked {
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
         }
         /// <summary>
-        /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
+        /// Gets called when message handlers are ready to be registered and the networking is setup.
         /// </summary>
         public override void OnNetworkSpawn () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
+            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_MsgNameClient = $"{NetworkObjectId}MsgClientLookSource{OwnerClientId}";
             m_MsgNameServer = $"{NetworkObjectId}MsgServerLookSource{OwnerClientId}";
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             if (IsServer) {
                 m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
@@ -120,7 +120,7 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (float) * 2 + sizeof (float) * 3 * 2;
+            return sizeof (byte) + sizeof (float) * 2 + sizeof (float) * 3 * 4;
         }
         /// <summary>
         /// Network sync event called from the NetworkInfo component
@@ -135,13 +135,13 @@ namespace GreedyVox.Networked {
         /// Network broadcast event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncServerEvent () {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
-                if (IsOwner) {
-                    SerializeView ();
-                } else {
+            if (IsOwner) { SerializeView (); }
+            if (m_Flag > 0) {
+                using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
                     SerializeView (ref m_Flag);
+                    if (m_Flag > 0)
+                        m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
                 }
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
             }
         }
         /// <summary>
@@ -219,16 +219,6 @@ namespace GreedyVox.Networked {
                     m_Flag |= (byte) TransformDirtyFlags.LookDirection;
                     m_NetworkLookDirection = lookDirection;
                 }
-                // Send the changes.
-                BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
-                if (m_Flag != (byte) TransformDirtyFlags.LookDirectionDistance)
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirectionDistance);
-                if (m_Flag != (byte) TransformDirtyFlags.Pitch)
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkPitch);
-                if (m_Flag != (byte) TransformDirtyFlags.LookPosition)
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookPosition);
-                if (m_Flag != (byte) TransformDirtyFlags.LookDirection)
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirection);
             }
         }
         /// <summary>

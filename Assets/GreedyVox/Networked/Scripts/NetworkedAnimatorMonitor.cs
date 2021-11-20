@@ -52,11 +52,8 @@ namespace GreedyVox.Networked {
             m_NetworkManager = NetworkedManager.Instance;
             m_NetworkInfo = GetComponent<INetworkInfo> ();
             m_NetworkEvent = GetComponent<NetworkedEvent> ();
-            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
-
             m_NetworkEvent.NetworkSpawnEvent += OnNetworkSpawnEvent;
             m_NetworkEvent.NetworkDespawnEvent += OnNetworkDespawnEvent;
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
         }
         /// <summary>
         /// Verify the update mode of the animator.
@@ -88,6 +85,8 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void OnNetworkSpawnEvent () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
+            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_MsgServerPara = $"{m_NetworkEvent.NetworkObjectId}MsgServerPara{m_NetworkEvent.OwnerClientId}";
             m_MsgServerItems = $"{m_NetworkEvent.NetworkObjectId}MsgServerItems{m_NetworkEvent.OwnerClientId}";
             m_MsgNameClient = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{m_NetworkEvent.OwnerClientId}";

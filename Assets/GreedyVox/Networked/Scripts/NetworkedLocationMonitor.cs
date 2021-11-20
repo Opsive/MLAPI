@@ -145,7 +145,7 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (float) * 3 * 6;
+            return sizeof (byte) + sizeof (float) * 3 * 7;
         }
         /// <summary>
         /// Synchronizes the transform.

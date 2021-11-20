@@ -27,9 +27,14 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GamingObject = gameObject;
-            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
             m_Settings = NetworkedManager.Instance.NetworkSettings;
             m_Health = m_GamingObject.GetCachedComponent<Health> ();
+        }
+        /// <summary>
+        /// Gets called when message handlers are ready to be registered and the networking is setup
+        /// </summary>
+        public override void OnNetworkSpawn () {
+            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
         }
         /// <summary>
         /// Spawn objects on death over the network.

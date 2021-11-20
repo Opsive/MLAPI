@@ -32,7 +32,6 @@ namespace GreedyVox.Networked {
         private bool m_InitialSync = true;
         private NetworkObject m_Platform;
         private NetworkedInfo m_NetworkInfo;
-        private NetworkTransport m_Transport;
         private IReadOnlyList<ulong> m_Clients;
         private ulong m_PlatformID, m_ServerID;
         private NetworkedManager m_NetworkManager;
@@ -54,10 +53,7 @@ namespace GreedyVox.Networked {
             m_NetworkPosition = m_Transform.position;
             m_NetworkRotation = m_Transform.rotation;
             m_NetworkManager = NetworkedManager.Instance;
-            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_NetworkInfo = gameObject.GetCachedComponent<NetworkedInfo> ();
-            m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_CharacterLocomotion = gameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
 
             EventHandler.RegisterEvent (gameObject, "OnRespawn", OnRespawn);
@@ -82,12 +78,14 @@ namespace GreedyVox.Networked {
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
         }
         /// <summary>
-        /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
+        /// Gets called when message handlers are ready to be registered and the networking is setup.
         /// </summary>
         public override void OnNetworkSpawn () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
+            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_MsgNameClient = $"{NetworkObjectId}MsgClientTransform{OwnerClientId}";
             m_MsgNameServer = $"{NetworkObjectId}MsgServerTransform{OwnerClientId}";
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             if (IsServer) {
                 m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
@@ -112,7 +110,7 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 4;
+            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 5;
         }
         /// <summary>
         /// Network sync event called from the NetworkInfo component

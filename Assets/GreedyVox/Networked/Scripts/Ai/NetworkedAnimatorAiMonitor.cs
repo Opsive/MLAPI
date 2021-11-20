@@ -50,7 +50,6 @@ namespace GreedyVox.Networked.Ai {
             m_NetworkInfo = GetComponent<INetworkInfo> ();
             m_NetworkEvent = GetComponent<NetworkedEvent> ();
             m_NetworkSync = gameObject.GetCachedComponent<NetworkedSyncRate> ();
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             m_NetworkEvent.NetworkSpawnEvent += OnNetworkSpawnEvent;
         }
@@ -80,7 +79,9 @@ namespace GreedyVox.Networked.Ai {
         /// </summary>
         private void OnNetworkSpawnEvent () {
             m_NetworkSync.NetworkSyncEvent += OnNetworkSyncEvent;
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_MsgName = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{ m_NetworkEvent.OwnerClientId}";
+
             if (!m_NetworkInfo.IsServer ()) {
                 m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent;
                 m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {

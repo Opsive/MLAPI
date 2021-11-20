@@ -31,7 +31,6 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GameObject = gameObject;
-            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
             m_Inventory = m_GameObject.GetCachedComponent<InventoryBase> ();
             m_CharacterLocomotion = m_GameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
         }
@@ -62,7 +61,11 @@ namespace GreedyVox.Networked {
                 }
             }
         }
+        /// <summary>
+        /// Gets called when message handlers are ready to be registered and the networking is setup.
+        /// </summary>
         public override void OnNetworkSpawn () {
+            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
             // Notify the joining player of the ItemIdentifiers that the player has within their inventory.
             if (m_Inventory != null) {
                 var items = m_Inventory.GetAllItems ();
@@ -119,10 +122,13 @@ namespace GreedyVox.Networked {
             }
             for (int i = 0; i < m_CharacterLocomotion.ActiveItemAbilityCount; i++) {
                 var activeItemAbility = m_CharacterLocomotion.ActiveItemAbilities[i];
-                if (IsServer) {
-                    StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (activeItemAbility.GetNetworkStartData ()));
-                } else {
-                    StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (activeItemAbility.GetNetworkStartData ()));
+                var abilities = activeItemAbility.GetNetworkStartData ();
+                if (abilities != null) {
+                    if (IsServer) {
+                        StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (abilities));
+                    } else {
+                        StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (abilities));
+                    }
                 }
             }
 #endif
