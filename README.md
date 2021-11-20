@@ -1,4 +1,4 @@
-# MLAPI
+# Netcode for GameObjects
 WIP for Opsive Character Controller networked using the Unity Netcode for GameObjects.
 
 <h3>Project Setup</h3><img src='https://user-images.githubusercontent.com/69744813/140709420-5cc80801-fef9-4afa-bf31-6b57fb94b470.png' alt="project"></img>
@@ -19,3 +19,16 @@ Currently the Ai prefab has no tool for adding the scripts, will require to manu
 Currently the Object prefab has no tool for adding the scripts, will also require to manually add.
 
 <h3>Object Setup</h3><img src='https://user-images.githubusercontent.com/69744813/133378345-393c2992-55da-49c9-b3e4-e8f401cd7143.png' alt="object"></img>
+
+All prefabs assigned to he UCC Object Pool will automatically be pooled with the Networked Object Pool, when using the interface for spawning the prefabs over the network.
+
+<h3>Object Pooling</h3><img src='https://user-images.githubusercontent.com/69744813/142705570-e0707d80-0df2-47bd-a097-65f56fa5947e.png' alt="pooling"></img>
+
+Provides built-in support for Object Pooling, allows to override the default Netcode destroy and spawn handlers, for storing destroyed network objects in a pool for reuse.
+
+<h3>Networked Pooling</h3><img src='https://user-images.githubusercontent.com/69744813/142705903-6912521e-5aaa-41d3-804f-670a5b062375.png' alt="spawning"></img>
+
+```
+m_SpawnObject = ObjectPool.Instantiate (m_CloneObject, Vector3.zero, Quaternion.identity);
+NetworkedObjectPool.NetworkSpawn (m_CloneObject, m_SpawnObject, true);
+```
