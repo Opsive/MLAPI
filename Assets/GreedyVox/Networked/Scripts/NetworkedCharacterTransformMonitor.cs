@@ -196,8 +196,10 @@ namespace GreedyVox.Networked {
                     };
                     m_InitialSync = false;
                 }
-                if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0)
-                    ByteUnpacker.ReadValuePacked (reader, out m_NetworkRotation);
+                if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0) {
+                    ByteUnpacker.ReadValuePacked (reader, out Vector3 angle);
+                    m_NetworkRotation = Quaternion.Euler (angle);
+                }
                 m_Distance = Vector3.Distance (m_Transform.position, m_NetworkPosition);
                 m_Angle = Quaternion.Angle (m_Transform.rotation, m_NetworkRotation);
             }
