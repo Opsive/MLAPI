@@ -32,3 +32,11 @@ Provides built-in support for Object Pooling, allows to override the default Net
 m_SpawnObject = ObjectPool.Instantiate (m_CloneObject, Vector3.zero, Quaternion.identity);
 NetworkedObjectPool.NetworkSpawn (m_CloneObject, m_SpawnObject, true);
 ```
+
+Basic networked menu for testing, with some basic customization using unity GUIStyle.
+
+<h3>Networked Menu</h3><img src='https://user-images.githubusercontent.com/69744813/142750865-b7422a45-492f-4666-a4c8-2f9b5b339f72.png' alt="gui"></img>
+
+Unity sytle networking menu gui, help with testing Server/Client connection setup.
+
+<h3>Networked GUI</h3><img src='https://user-images.githubusercontent.com/69744813/142750947-1b12a762-5455-4745-afde-ae507ad1eded.png' alt="gui"></img>
