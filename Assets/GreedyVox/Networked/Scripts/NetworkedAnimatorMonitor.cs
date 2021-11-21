@@ -33,7 +33,7 @@ namespace GreedyVox.Networked {
         private NetworkedManager m_NetworkManager;
         private FastBufferWriter m_FastBufferWriter;
         private int m_SnappedAbilityIndex = -1;
-        private short m_DirtyFlag;
+        private short m_Flag;
         private int m_MaxBufferSize;
         private byte m_ItemDirtySlot;
         private float m_NetworkHorizontalMovement;
@@ -85,7 +85,6 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void OnNetworkSpawnEvent () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
-            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_MsgServerPara = $"{m_NetworkEvent.NetworkObjectId}MsgServerPara{m_NetworkEvent.OwnerClientId}";
             m_MsgServerItems = $"{m_NetworkEvent.NetworkObjectId}MsgServerItems{m_NetworkEvent.OwnerClientId}";
@@ -93,6 +92,7 @@ namespace GreedyVox.Networked {
             m_MsgNameServer = $"{m_NetworkEvent.NetworkObjectId}MsgServerAnima{m_NetworkEvent.OwnerClientId}";
 
             if (m_NetworkInfo.IsServer ()) {
+                m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
                 m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
             } else if (m_NetworkEvent.IsOwner) {
                 m_NetworkManager.NetworkSettings.NetworkSyncClientEvent += OnNetworkSyncClientEvent;
@@ -124,7 +124,9 @@ namespace GreedyVox.Networked {
                     for (int i = 0; i < ParameterSlotCount; i++) {
                         using (m_FastBufferWriter = new FastBufferWriter (1, Allocator.Temp, m_MaxBufferSize)) {
                             InitializeItemParameters (i);
-                            m_CustomMessagingManager.SendNamedMessage (m_MsgServerItems, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                            if (m_FastBufferWriter.Capacity > 0) {
+                                m_CustomMessagingManager.SendNamedMessage (m_MsgServerItems, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                            }
                         }
                     }
                 }
@@ -141,18 +143,26 @@ namespace GreedyVox.Networked {
         /// Network sync event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncClientEvent () {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_DirtyFlag), Allocator.Temp, m_MaxBufferSize)) {
-                SynchronizeParameters ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+            // Error handling if this function still executing after despawning event
+            if (NetworkManager.Singleton.IsClient) {
+                using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                    if (SynchronizeParameters ()) {
+                        m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                    }
+                }
             }
         }
         /// <summary>
         /// Network broadcast event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncServerEvent () {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_DirtyFlag), Allocator.Temp, m_MaxBufferSize)) {
-                SynchronizeParameters ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+            // Error handling if this function still executing after despawning event
+            if (NetworkManager.Singleton.IsServer) {
+                using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                    if (SynchronizeParameters ()) {
+                        m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                    }
+                }
             }
         }
         /// <summary>
@@ -309,31 +319,32 @@ namespace GreedyVox.Networked {
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written.</param>
-        private void SynchronizeParameters () {
-            BytePacker.WriteValuePacked (m_FastBufferWriter, m_DirtyFlag);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
+        private bool SynchronizeParameters () {
+            bool results = m_Flag > 0;
+            BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
+            if ((m_Flag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, HorizontalMovement);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, ForwardMovement);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Pitch) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Pitch) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Pitch);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Yaw) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Yaw) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Yaw);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Speed) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Speed) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Speed);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Height) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Height) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Height);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Moving) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Moving) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Moving);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Aiming) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Aiming) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Aiming);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.MovementSetID) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.MovementSetID) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, MovementSetID);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityIndex) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityIndex) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIndex);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIntData);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityFloatData);
             if (HasItemParameters) {
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_ItemDirtySlot);
@@ -345,8 +356,9 @@ namespace GreedyVox.Networked {
                     }
                 }
             }
-            m_DirtyFlag = 0;
+            m_Flag = 0;
             m_ItemDirtySlot = 0;
+            return results;
         }
         /// <summary>
         /// Sets the Horizontal Movement parameter to the specified value.
@@ -361,7 +373,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetHorizontalMovementParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.HorizontalMovement;
+                m_Flag |= (short) ParameterDirtyFlags.HorizontalMovement;
                 return true;
             }
             return false;
@@ -379,7 +391,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetForwardMovementParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.ForwardMovement;
+                m_Flag |= (short) ParameterDirtyFlags.ForwardMovement;
                 return true;
             }
             return false;
@@ -397,7 +409,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetPitchParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Pitch;
+                m_Flag |= (short) ParameterDirtyFlags.Pitch;
                 return true;
             }
             return false;
@@ -415,7 +427,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetYawParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Yaw;
+                m_Flag |= (short) ParameterDirtyFlags.Yaw;
                 return true;
             }
             return false;
@@ -433,7 +445,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetSpeedParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Speed;
+                m_Flag |= (short) ParameterDirtyFlags.Speed;
                 return true;
             }
             return false;
@@ -449,7 +461,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetHeightParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Height;
+                m_Flag |= (short) ParameterDirtyFlags.Height;
                 return true;
             }
             return false;
@@ -465,7 +477,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetMovingParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Moving;
+                m_Flag |= (short) ParameterDirtyFlags.Moving;
                 return true;
             }
             return false;
@@ -481,7 +493,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetAimingParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Aiming;
+                m_Flag |= (short) ParameterDirtyFlags.Aiming;
                 return true;
             }
             return false;
@@ -497,7 +509,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetMovementSetIDParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.MovementSetID;
+                m_Flag |= (short) ParameterDirtyFlags.MovementSetID;
                 return true;
             }
             return false;
@@ -513,7 +525,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetAbilityIndexParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityIndex;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityIndex;
                 return true;
             }
             return false;
@@ -529,7 +541,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetAbilityIntDataParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityIntData;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityIntData;
                 return true;
             }
             return false;
@@ -547,7 +559,7 @@ namespace GreedyVox.Networked {
                 return false;
             }
             if (base.SetAbilityFloatDataParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityFloatData;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityFloatData;
                 return true;
             }
             return false;

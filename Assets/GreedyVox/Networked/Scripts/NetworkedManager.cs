@@ -57,9 +57,8 @@ namespace GreedyVox.Networked {
 
             Connection.OnClientConnectedCallback += ID => {
                 m_NetworkSettings.PlayConnect (m_AudioSource);
-                var client = Connection.ConnectedClients[ID];
                 NetworkLog.LogInfoServer ("<color=white>Client Connected</color>");
-                Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", client, ID);
+                Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", Connection.LocalClient, ID);
             };
 
             if (m_NetworkSettings == null) {

@@ -94,7 +94,7 @@ namespace GreedyVox.Networked.Ai {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 5;
+            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 4;
         }
         /// <summary>
         /// Network broadcast event called from the NetworkedSyncRate component

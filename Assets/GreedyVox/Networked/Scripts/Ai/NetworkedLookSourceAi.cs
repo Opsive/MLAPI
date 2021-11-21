@@ -134,13 +134,13 @@ namespace GreedyVox.Networked.Ai {
         /// <param name="stream">The stream that is being read from.</param>
         public void SerializeView (ref FastBufferReader reader) {
             ByteUnpacker.ReadValuePacked (reader, out m_Flag);
-            if (m_Flag != (byte) TransformDirtyFlags.LookDirectionDistance)
+            if ((m_Flag & (byte) TransformDirtyFlags.LookDirectionDistance) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookDirectionDistance);
-            if (m_Flag != (byte) TransformDirtyFlags.Pitch)
+            if ((m_Flag & (byte) TransformDirtyFlags.Pitch) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetPitch);
-            if (m_Flag != (byte) TransformDirtyFlags.LookPosition)
+            if ((m_Flag & (byte) TransformDirtyFlags.LookPosition) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookPosition);
-            if (m_Flag != (byte) TransformDirtyFlags.LookDirection)
+            if ((m_Flag & (byte) TransformDirtyFlags.LookDirection) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookDirection);
             if (m_InitialSync) {
                 m_NetworkLookDirectionDistance = m_NetworkTargetLookDirectionDistance;
@@ -178,13 +178,13 @@ namespace GreedyVox.Networked.Ai {
                 }
                 // Send the changes.
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
-                if (m_Flag != (byte) TransformDirtyFlags.LookDirectionDistance)
+                if ((m_Flag & (byte) TransformDirtyFlags.LookDirectionDistance) != 0)
                     BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirectionDistance);
-                if (m_Flag != (byte) TransformDirtyFlags.Pitch)
+                if ((m_Flag & (byte) TransformDirtyFlags.Pitch) != 0)
                     BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkPitch);
-                if (m_Flag != (byte) TransformDirtyFlags.LookPosition)
+                if ((m_Flag & (byte) TransformDirtyFlags.LookPosition) != 0)
                     BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookPosition);
-                if (m_Flag != (byte) TransformDirtyFlags.LookDirection)
+                if ((m_Flag & (byte) TransformDirtyFlags.LookDirection) != 0)
                     BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirection);
             }
             return m_Flag > 0;

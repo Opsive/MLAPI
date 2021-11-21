@@ -29,7 +29,7 @@ namespace GreedyVox.Networked {
                     if (IsServer) {
                         UpdateAttributeClientRpc (attributes[i].Name, attributes[i].Value, attributes[i].MinValue, attributes[i].MaxValue,
                             attributes[i].AutoUpdateAmount, attributes[i].AutoUpdateInterval, attributes[i].AutoUpdateStartDelay, (int) attributes[i].AutoUpdateValueType);
-                    } else {
+                    } else if (IsOwner) {
                         UpdateAttributeServerRpc (attributes[i].Name, attributes[i].Value, attributes[i].MinValue, attributes[i].MaxValue,
                             attributes[i].AutoUpdateAmount, attributes[i].AutoUpdateInterval, attributes[i].AutoUpdateStartDelay, (int) attributes[i].AutoUpdateValueType);
                     }

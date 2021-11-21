@@ -92,12 +92,12 @@ namespace GreedyVox.Networked {
         /// </summary>
         public override void OnNetworkSpawn () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
-            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_MsgNameClient = $"{NetworkObjectId}MsgClientLookSource{OwnerClientId}";
             m_MsgNameServer = $"{NetworkObjectId}MsgServerLookSource{OwnerClientId}";
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             if (IsServer) {
+                m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
                 m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
             } else if (IsOwner) {
                 m_NetworkManager.NetworkSettings.NetworkSyncClientEvent += OnNetworkSyncClientEvent;
@@ -120,27 +120,35 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (float) * 2 + sizeof (float) * 3 * 4;
+            return sizeof (byte) + sizeof (float) * 2 + sizeof (float) * 3 * 3;
         }
         /// <summary>
         /// Network sync event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncClientEvent () {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
-                SerializeView ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+            // Error handling if this function still executing after despawning event
+            if (NetworkManager.Singleton.IsClient) {
+                using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                    if (SerializeView ()) {
+                        m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                    }
+                }
             }
         }
         /// <summary>
         /// Network broadcast event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncServerEvent () {
-            if (IsOwner) { SerializeView (); }
-            if (m_Flag > 0) {
+            // Error handling if this function still executing after despawning event
+            if (NetworkManager.Singleton.IsServer) {
                 using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
-                    SerializeView (ref m_Flag);
-                    if (m_Flag > 0)
+                    if (IsOwner) {
+                        if (SerializeView ()) {
+                            m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                        }
+                    } else if (SerializeView (ref m_Flag)) {
                         m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                    }
                 }
             }
         }
@@ -161,13 +169,13 @@ namespace GreedyVox.Networked {
         /// <param name="stream">The stream that is being read from.</param>
         public void SerializeView (ref FastBufferReader reader) {
             ByteUnpacker.ReadValuePacked (reader, out m_Flag);
-            if (m_Flag != (byte) TransformDirtyFlags.LookDirectionDistance)
+            if ((m_Flag & (byte) TransformDirtyFlags.LookDirectionDistance) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookDirectionDistance);
-            if (m_Flag != (byte) TransformDirtyFlags.Pitch)
+            if ((m_Flag & (byte) TransformDirtyFlags.Pitch) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetPitch);
-            if (m_Flag != (byte) TransformDirtyFlags.LookPosition)
+            if ((m_Flag & (byte) TransformDirtyFlags.LookPosition) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookPosition);
-            if (m_Flag != (byte) TransformDirtyFlags.LookDirection)
+            if ((m_Flag & (byte) TransformDirtyFlags.LookDirection) != 0)
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookDirection);
             if (m_InitialSync) {
                 m_NetworkLookDirectionDistance = m_NetworkTargetLookDirectionDistance;
@@ -181,23 +189,24 @@ namespace GreedyVox.Networked {
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written to.</param>
-        public void SerializeView (ref byte flag) {
+        public bool SerializeView (ref byte flag) {
             // Send the changes.
             BytePacker.WriteValuePacked (m_FastBufferWriter, flag);
-            if (flag != (byte) TransformDirtyFlags.LookDirectionDistance)
+            if ((flag & (byte) TransformDirtyFlags.LookDirectionDistance) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirectionDistance);
-            if (flag != (byte) TransformDirtyFlags.Pitch)
+            if ((flag & (byte) TransformDirtyFlags.Pitch) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkPitch);
-            if (flag != (byte) TransformDirtyFlags.LookPosition)
+            if ((flag & (byte) TransformDirtyFlags.LookPosition) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookPosition);
-            if (flag != (byte) TransformDirtyFlags.LookDirection)
+            if ((flag & (byte) TransformDirtyFlags.LookDirection) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirection);
+            return flag > 0;
         }
         /// <summary>
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written to.</param>
-        public void SerializeView () {
+        public bool SerializeView () {
             // Determine the objects that have changed.
             m_Flag = 0;
             if (m_LookSource != null) {
@@ -220,6 +229,7 @@ namespace GreedyVox.Networked {
                     m_NetworkLookDirection = lookDirection;
                 }
             }
+            return SerializeView (ref m_Flag);
         }
         /// <summary>
         /// A new ILookSource object has been attached to the character.

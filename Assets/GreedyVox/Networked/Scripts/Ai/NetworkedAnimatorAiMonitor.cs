@@ -30,7 +30,7 @@ namespace GreedyVox.Networked.Ai {
             AbilityIntData = 1024, // The Ability Int Data parameter has changed.
             AbilityFloatData = 2048 // The Ability Float Data parameter has changed.
         }
-        private short m_DirtyFlag;
+        private short m_Flag;
         private int m_MaxBufferSize;
         private byte m_ItemDirtySlot;
         private string m_MsgName;
@@ -100,7 +100,7 @@ namespace GreedyVox.Networked.Ai {
         /// Network broadcast event called from the NetworkedSyncRate component
         /// </summary>
         private void OnNetworkSyncEvent (List<ulong> clients) {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_DirtyFlag), Allocator.Temp, m_MaxBufferSize)) {
+            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
                 if (SynchronizeParameters ()) {
                     m_CustomMessagingManager.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
                 }
@@ -266,31 +266,31 @@ namespace GreedyVox.Networked.Ai {
         /// </summary>
         /// <param name="stream">The stream that is being written.</param>
         private bool SynchronizeParameters () {
-            bool results = m_DirtyFlag > 0;
-            BytePacker.WriteValuePacked (m_FastBufferWriter, m_DirtyFlag);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
+            bool results = m_Flag > 0;
+            BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
+            if ((m_Flag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, HorizontalMovement);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, ForwardMovement);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Pitch) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Pitch) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Pitch);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Yaw) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Yaw) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Yaw);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Speed) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Speed) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Speed);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Height) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Height) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Height);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Moving) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Moving) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Moving);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Aiming) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.Aiming) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, Aiming);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.MovementSetID) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.MovementSetID) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, MovementSetID);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityIndex) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityIndex) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIndex);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIntData);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityFloatData);
             if (HasItemParameters) {
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_ItemDirtySlot);
@@ -302,7 +302,7 @@ namespace GreedyVox.Networked.Ai {
                     }
                 }
             }
-            m_DirtyFlag = 0;
+            m_Flag = 0;
             m_ItemDirtySlot = 0;
             return results;
         }
@@ -319,7 +319,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetHorizontalMovementParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.HorizontalMovement;
+                m_Flag |= (short) ParameterDirtyFlags.HorizontalMovement;
                 return true;
             }
             return false;
@@ -337,7 +337,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetForwardMovementParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.ForwardMovement;
+                m_Flag |= (short) ParameterDirtyFlags.ForwardMovement;
                 return true;
             }
             return false;
@@ -355,7 +355,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetPitchParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Pitch;
+                m_Flag |= (short) ParameterDirtyFlags.Pitch;
                 return true;
             }
             return false;
@@ -373,7 +373,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetYawParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Yaw;
+                m_Flag |= (short) ParameterDirtyFlags.Yaw;
                 return true;
             }
             return false;
@@ -391,7 +391,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetSpeedParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Speed;
+                m_Flag |= (short) ParameterDirtyFlags.Speed;
                 return true;
             }
             return false;
@@ -407,7 +407,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetHeightParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Height;
+                m_Flag |= (short) ParameterDirtyFlags.Height;
                 return true;
             }
             return false;
@@ -423,7 +423,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetMovingParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Moving;
+                m_Flag |= (short) ParameterDirtyFlags.Moving;
                 return true;
             }
             return false;
@@ -439,7 +439,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAimingParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Aiming;
+                m_Flag |= (short) ParameterDirtyFlags.Aiming;
                 return true;
             }
             return false;
@@ -455,7 +455,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetMovementSetIDParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.MovementSetID;
+                m_Flag |= (short) ParameterDirtyFlags.MovementSetID;
                 return true;
             }
             return false;
@@ -471,7 +471,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAbilityIndexParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityIndex;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityIndex;
                 return true;
             }
             return false;
@@ -487,7 +487,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAbilityIntDataParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityIntData;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityIntData;
                 return true;
             }
             return false;
@@ -505,7 +505,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAbilityFloatDataParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityFloatData;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityFloatData;
                 return true;
             }
             return false;

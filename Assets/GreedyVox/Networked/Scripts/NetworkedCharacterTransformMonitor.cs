@@ -82,12 +82,12 @@ namespace GreedyVox.Networked {
         /// </summary>
         public override void OnNetworkSpawn () {
             m_ServerID = NetworkManager.Singleton.ServerClientId;
-            m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
             m_MsgNameClient = $"{NetworkObjectId}MsgClientTransform{OwnerClientId}";
             m_MsgNameServer = $"{NetworkObjectId}MsgServerTransform{OwnerClientId}";
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             if (IsServer) {
+                m_Clients = NetworkManager.Singleton.ConnectedClientsIds;
                 m_NetworkManager.NetworkSettings.NetworkSyncServerEvent += OnNetworkSyncServerEvent;
             } else if (IsOwner) {
                 m_NetworkManager.NetworkSettings.NetworkSyncClientEvent += OnNetworkSyncClientEvent;
@@ -110,28 +110,36 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         private int MaxBufferSize () {
-            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 5;
+            return sizeof (byte) + sizeof (long) + sizeof (float) * 3 * 4;
         }
         /// <summary>
         /// Network sync event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncClientEvent () {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
-                Serialize ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+            // Error handling if this function still executing after despawning event
+            if (NetworkManager.Singleton.IsClient) {
+                using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                    if (Serialize ()) {
+                        m_CustomMessagingManager.SendNamedMessage (m_MsgNameServer, m_ServerID, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                    }
+                }
             }
         }
         /// <summary>
         /// Network broadcast event called from the NetworkInfo component
         /// </summary>
         private void OnNetworkSyncServerEvent () {
-            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
-                if (IsOwner) {
-                    Serialize ();
-                } else {
-                    Serialize (ref m_Flag);
+            // Error handling if this function still executing after despawning event
+            if (NetworkManager.Singleton.IsServer) {
+                using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                    if (IsOwner) {
+                        if (Serialize ()) {
+                            m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                        }
+                    } else if (Serialize (ref m_Flag)) {
+                        m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                    }
                 }
-                m_CustomMessagingManager.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
             }
         }
         /// <summary>
@@ -203,7 +211,7 @@ namespace GreedyVox.Networked {
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written to.</param>
-        public void Serialize (ref byte flag) {
+        public bool Serialize (ref byte flag) {
             // When the character is on a platform the position and rotation is relative to that platform.
             if (m_CharacterLocomotion.Platform != null) {
                 var platform = m_CharacterLocomotion.Platform.gameObject.GetCachedComponent<NetworkObject> ();
@@ -230,12 +238,13 @@ namespace GreedyVox.Networked {
             }
             if ((flag & (byte) TransformDirtyFlags.Scale) != 0)
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_Transform.localScale);
+            return flag > 0;
         }
         /// <summary>
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written to.</param>
-        public void Serialize () {
+        public bool Serialize () {
             m_Flag = 0;
             if (m_SynchronizeScale && m_Transform != null && m_Transform.localScale != m_NetworkScale)
                 m_Flag |= (byte) TransformDirtyFlags.Scale;
@@ -287,6 +296,7 @@ namespace GreedyVox.Networked {
                 BytePacker.WriteValuePacked (m_FastBufferWriter, m_Transform.localScale);
                 m_NetworkScale = m_Transform.localScale;
             }
+            return m_Flag > 0;
         }
         /// <summary>
         /// The character has respawned.
