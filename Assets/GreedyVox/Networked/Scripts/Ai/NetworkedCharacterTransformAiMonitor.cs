@@ -71,7 +71,7 @@ namespace GreedyVox.Networked.Ai {
         /// The object has been despawned.
         /// </summary>
         public override void OnNetworkDespawn () {
-            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgName);
+            m_CustomMessagingManager?.UnregisterNamedMessageHandler (m_MsgName);
             m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
         }
@@ -85,7 +85,7 @@ namespace GreedyVox.Networked.Ai {
 
             if (!IsServer) {
                 if (m_NetworkManager != null) { m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent; }
-                m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
                     Serialize (ref reader);
                 });
             }
@@ -102,7 +102,7 @@ namespace GreedyVox.Networked.Ai {
         private void OnNetworkSyncEvent (List<ulong> clients) {
             using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
                 if (Serialize ()) {
-                    m_CustomMessagingManager.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                    m_CustomMessagingManager?.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
                 }
             }
         }

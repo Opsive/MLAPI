@@ -1,4 +1,5 @@
 ﻿using GreedyVox.Networked;
+using GreedyVox.Networked.Utilities;
 using Opsive.UltimateCharacterController.AddOns.Multiplayer.Character;
 using Opsive.UltimateCharacterController.Character;
 using Opsive.UltimateCharacterController.Editor.Managers;
@@ -10,12 +11,12 @@ using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
-public class NetworkedPlayerInspector : EditorWindow {
+public class NetworkedCharacterInspector : EditorWindow {
     private Object m_NetworkCharacter;
-    [MenuItem ("Tools/GreedyVox/NetworkedPlayerInspector")]
-    private static NetworkedPlayerInspector Init () {
-        return EditorWindow.GetWindowWithRect<NetworkedPlayerInspector> (
-            new Rect (Screen.width - 300 / 2, Screen.height - 200 / 2, 300, 200), true, "Network Player Inspector");
+    [MenuItem ("Tools/GreedyVox/Networked/Character Inspector")]
+    private static NetworkedCharacterInspector Init () {
+        return EditorWindow.GetWindowWithRect<NetworkedCharacterInspector> (
+            new Rect (Screen.width - 300 / 2, Screen.height - 200 / 2, 300, 200), true, "Network Character");
     }
     private void OnGUI () {
         EditorGUILayout.BeginHorizontal ();
@@ -30,78 +31,54 @@ public class NetworkedPlayerInspector : EditorWindow {
             }
         }
     }
-    private bool HasComponent<T> (GameObject obj) where T : Component {
-        return obj.GetComponent<T> () != null;
-    }
-    private bool TryAddComponent<T> (GameObject obj) where T : Component {
-        var component = obj.GetComponent<T> ();
-        if (component == null) {
-            obj.AddComponent<T> ();
-            return true;
-        }
-        return false;
-    }
-    private T TryAddGetComponent<T> (GameObject obj) where T : Component {
-        var component = obj.GetComponent<T> ();
-        if (component == null) {
-            component = obj.AddComponent<T> ();
-        }
-        return component;
-    }
-    private bool TryRemoveComponent<T> (GameObject obj) where T : Component {
-        var component = obj.GetComponent<T> ();
-        if (component != null) {
-            GameObject.DestroyImmediate (component, true);
-            return true;
-        }
-        return false;
-    }
     /// <summary>
-    /// Sets up the character to be able to work with pun.
+    /// Sets up the character to be able to work with networking.
     /// </summary>
     private void SetupCharacter (GameObject obj) {
         // Remove the single player variants of the necessary components.
-        TryRemoveComponent<AnimatorMonitor> (obj);
-        if (TryRemoveComponent<UltimateCharacterLocomotionHandler> (obj)) {
-            TryAddComponent<NetworkCharacterLocomotionHandler> (obj);
+        ComponentUtility.TryRemoveComponent<AnimatorMonitor> (obj);
+        if (ComponentUtility.TryRemoveComponent<UltimateCharacterLocomotionHandler> (obj)) {
+            ComponentUtility.TryAddComponent<NetworkCharacterLocomotionHandler> (obj);
         }
-        TryAddComponent<NetworkObject> (obj);
-        TryAddComponent<NetworkedCharacterTransformMonitor> (obj);
-        TryAddComponent<NetworkedAnimatorMonitor> (obj);
-        TryAddComponent<NetworkedLookSource> (obj);
-        TryAddComponent<NetworkedCharacter> (obj);
-        TryAddComponent<NetworkedInfo> (obj);
-        TryAddComponent<NetworkedEvent> (obj);
+        if (ComponentUtility.TryAddComponent<NetworkObject> (obj, out var net)) {
+            net.AutoObjectParentSync = false;
+        }
+        ComponentUtility.TryAddComponent<NetworkedCharacterTransformMonitor> (obj);
+        ComponentUtility.TryAddComponent<NetworkedAnimatorMonitor> (obj);
+        ComponentUtility.TryAddComponent<NetworkedLookSource> (obj);
+        ComponentUtility.TryAddComponent<NetworkedCharacter> (obj);
+        ComponentUtility.TryAddComponent<NetworkedInfo> (obj);
+        ComponentUtility.TryAddComponent<NetworkedEvent> (obj);
         // Certain components may be necessary if their single player components is added to the character.
 
-        if (HasComponent<AttributeManager> (obj)) {
-            TryAddComponent<NetworkedAttributeMonitor> (obj);
+        if (ComponentUtility.HasComponent<AttributeManager> (obj)) {
+            ComponentUtility.TryAddComponent<NetworkedAttributeMonitor> (obj);
         }
-        if (HasComponent<Health> (obj)) {
-            TryAddComponent<NetworkedHealthMonitor> (obj);
+        if (ComponentUtility.HasComponent<Health> (obj)) {
+            ComponentUtility.TryAddComponent<NetworkedHealthMonitor> (obj);
         }
-        if (HasComponent<Respawner> (obj)) {
-            TryAddComponent<NetworkedRespawnerMonitor> (obj);
+        if (ComponentUtility.HasComponent<Respawner> (obj)) {
+            ComponentUtility.TryAddComponent<NetworkedRespawnerMonitor> (obj);
         }
-        if (HasComponent<Destructible> (obj)) {
-            TryAddComponent<NetworkedDestructibleMonitor> (obj);
+        if (ComponentUtility.HasComponent<Destructible> (obj)) {
+            ComponentUtility.TryAddComponent<NetworkedDestructibleMonitor> (obj);
         }
 
         // The RemotePlayerPerspectiveMonitor will switch out the first person materials if the third person Perspective Monitor doesn't exist.
 #if THIRD_PERSON_CONTROLLER
-        var addRemotePlayerPerspectiveMonitor = HasComponent<PerspectiveMonitor> (obj);
+        var addRemotePlayerPerspectiveMonitor = ComponentUtility.HasComponent<PerspectiveMonitor> (obj);
 #else
         var addRemotePlayerPerspectiveMonitor = true;
 #endif
         var invisibleShadowCastor = ManagerUtility.FindInvisibleShadowCaster (this);
         if (addRemotePlayerPerspectiveMonitor) {
-            var remotePlayerPerspectiveMonitor = TryAddGetComponent<NetworkedRemotePlayerPerspectiveMonitor> (obj);
+            var remotePlayerPerspectiveMonitor = ComponentUtility.TryAddGetComponent<NetworkedRemotePlayerPerspectiveMonitor> (obj);
             if (remotePlayerPerspectiveMonitor.InvisibleMaterial == null) {
                 remotePlayerPerspectiveMonitor.InvisibleMaterial = invisibleShadowCastor;
             }
         }
 
-        if (TryAddComponent<NetworkedRuntimePickups> (obj)) {
+        if (ComponentUtility.TryAddComponent<NetworkedRuntimePickups> (obj)) {
             // TODO: Add a list of items to be added
         }
 
@@ -152,7 +129,7 @@ public class NetworkedPlayerInspector : EditorWindow {
                 continue;
             }
 
-            var objectIdentifier = TryAddGetComponent<ObjectIdentifier> (colliders[i].gameObject);
+            var objectIdentifier = ComponentUtility.TryAddGetComponent<ObjectIdentifier> (colliders[i].gameObject);
             objectIdentifier.ID = maxID + IDOffset;
             IDOffset++;
         }

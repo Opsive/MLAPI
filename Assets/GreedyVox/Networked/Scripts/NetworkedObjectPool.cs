@@ -69,7 +69,7 @@ namespace GreedyVox.Networked {
             if ((m_NetworkObject = obj.GetComponent<NetworkObject> ()) != null && m_NetworkObject.IsSpawned) {
                 if (NetworkManager.Singleton.IsServer) {
                     m_NetworkObject.Despawn ();
-                } else {
+                } else if (NetworkManager.Singleton.IsClient) {
                     m_NetworkedMessenger?.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
                 }
             }

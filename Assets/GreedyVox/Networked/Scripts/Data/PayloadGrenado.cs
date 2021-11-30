@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace GreedyVox.Networked.Data {
     public struct PayloadGrenado : INetworkSerializable {
-        public StringValue ImpactStateName;
+        public string ImpactStateName;
         public Vector3 Torque;
         public Vector3 Velocity;
         public int ImpactFrames;

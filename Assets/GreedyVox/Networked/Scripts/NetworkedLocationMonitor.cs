@@ -56,7 +56,6 @@ namespace GreedyVox.Networked {
             m_NetworkRotation = m_Transform.rotation;
             m_Settings = NetworkedManager.Instance.NetworkSettings;
             m_NetworkSync = gameObject.GetCachedComponent<NetworkedSyncRate> ();
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
         }
         /// <summary>
         /// The object has been enabled.
@@ -67,13 +66,6 @@ namespace GreedyVox.Networked {
             if (m_SynchronizeActiveState && NetworkedObjectPool.SpawnedWithPool (m_GameObject)) {
                 m_SynchronizeActiveState = false;
             }
-            if (m_SynchronizeActiveState && IsOwner) {
-                if (IsServer) {
-                    SetActiveClientRpc (m_GameObject.activeSelf);
-                } else {
-                    SetActiveServerRpc (m_GameObject.activeSelf);
-                }
-            }
         }
         /// <summary>
         /// The object has been despawned.
@@ -82,7 +74,7 @@ namespace GreedyVox.Networked {
             m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_Settings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
             m_Settings.NetworkSyncFixedUpdateEvent -= OnNetworkSyncFixedUpdateEvent;
-            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgName);
+            m_CustomMessagingManager?.UnregisterNamedMessageHandler (m_MsgName);
         }
         /// <summary>
         /// A player has entered the world. Ensure the joining player is in sync with the current game state.
@@ -92,16 +84,18 @@ namespace GreedyVox.Networked {
         public override void OnNetworkSpawn () {
             m_NetworkSync.NetworkSyncEvent += OnNetworkSyncEvent;
             m_MsgName = $"{NetworkObjectId}MsgClientLocationMonitor{OwnerClientId}";
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
+
             if (!IsServer) {
                 if (m_Rigidbody == null) { m_Settings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent; } else {
                     m_Settings.NetworkSyncFixedUpdateEvent += OnNetworkSyncFixedUpdateEvent;
                 }
-                m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
                     Serialize (ref reader);
                 });
             }
             if (m_SynchronizeActiveState && !NetworkObjectPool.SpawnedWithPool (m_GameObject)) {
-                if (IsServer) { SetActiveClientRpc (m_GameObject.activeSelf); } else {
+                if (IsServer) { SetActiveClientRpc (m_GameObject.activeSelf); } else if (IsOwner) {
                     SetActiveServerRpc (m_GameObject.activeSelf);
                 }
             }
@@ -111,8 +105,9 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void OnNetworkSyncEvent (List<ulong> clients) {
             using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
-                Serialize ();
-                m_CustomMessagingManager.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                if (Serialize ()) {
+                    m_CustomMessagingManager?.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
+                }
             }
         }
 
@@ -191,7 +186,8 @@ namespace GreedyVox.Networked {
             }
             if (m_SynchronizeRotation) {
                 if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0) {
-                    ByteUnpacker.ReadValuePacked (reader, out m_NetworkRotation);
+                    ByteUnpacker.ReadValuePacked (reader, out Vector3 angle);
+                    m_NetworkRotation = Quaternion.Euler (angle);
                     m_Angle = Quaternion.Angle (m_Transform.rotation, m_NetworkRotation);
                 }
                 if ((m_Flag & (byte) TransformDirtyFlags.RigidbodyAngularVelocity) != 0 && m_Rigidbody != null) {

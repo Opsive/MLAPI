@@ -72,7 +72,7 @@ namespace GreedyVox.Networked.Ai {
         private void OnNetworkDespawnEvent () {
             m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
-            m_CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgName);
+            m_CustomMessagingManager?.UnregisterNamedMessageHandler (m_MsgName);
         }
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
@@ -84,7 +84,7 @@ namespace GreedyVox.Networked.Ai {
 
             if (!m_NetworkInfo.IsServer ()) {
                 m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent;
-                m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
                     SynchronizeParameters (ref reader);
                 });
             }
@@ -102,7 +102,7 @@ namespace GreedyVox.Networked.Ai {
         private void OnNetworkSyncEvent (List<ulong> clients) {
             using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
                 if (SynchronizeParameters ()) {
-                    m_CustomMessagingManager.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
+                    m_CustomMessagingManager?.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
                 }
             }
         }

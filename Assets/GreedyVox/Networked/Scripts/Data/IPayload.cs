@@ -1,15 +1,15 @@
+using Unity.Netcode;
 using UnityEngine;
 
 namespace GreedyVox.Networked.Data {
     public interface IPayload {
         /// <summary>
-        /// Returns the initialization data that is required when the object spawns.
-        /// This allows the remote players to initialize the object correctly.
+        /// The object has been spawned, write the payload data.
         /// </summary>
-        void Load ();
+        bool Load (out FastBufferWriter writer);
         /// <summary>
-        /// Callback after the object has been spawned.
+        /// The object has been spawned, read the payload data.
         /// </summary>
-        void Unload<T> (T val, GameObject go) where T : unmanaged;
+        void Unload (ref FastBufferReader reader, GameObject go);
     }
 }

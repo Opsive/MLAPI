@@ -8,7 +8,7 @@ using UnityEngine;
 /// <summary>
 /// Small utility methods that interact with PUN.
 /// </summary>
-namespace GreedyVox.Networked {
+namespace GreedyVox.Networked.Utilities {
     public static class NetworkedUtility {
         private static Dictionary<ulong, ObjectIdentifier> s_SceneIDMap = new Dictionary<ulong, ObjectIdentifier> ();
         private static Dictionary<GameObject, Dictionary<ulong, ObjectIdentifier>> s_IDObjectIDMap = new Dictionary<GameObject, Dictionary<ulong, ObjectIdentifier>> ();

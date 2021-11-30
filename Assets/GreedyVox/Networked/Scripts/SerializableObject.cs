@@ -3,7 +3,11 @@ using Unity.Netcode;
 
 namespace GreedyVox.Networked {
     public struct SerializableObject : INetworkSerializable {
-        public object Value { get { return Value ?? new object (); } set { Value = value; } }
+        // Infite loop needs to be replaced, this works to bypass the complilier.
+        // May need to replace the whole struct to find a working solution with the networking buffers.
+        // The type 'SerializableObject' must be a non-nullable value type, along with all fields at any level of nesting, 
+        // in order to use it as parameter 'T' in the generic type or method 'BufferSerializer<T>.SerializeValue<T>(ref T)'
+        public object Value { get => Value ?? new object (); set => Value = value; }
         public void NetworkSerialize<T> (BufferSerializer<T> serializer) where T : IReaderWriter {
             var size = serializer.IsReader ? 0 :
                 Marshal.SizeOf (Value);

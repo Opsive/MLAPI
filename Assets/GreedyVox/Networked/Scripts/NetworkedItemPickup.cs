@@ -1,10 +1,12 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using GreedyVox.Networked.Data;
 using Opsive.Shared.Game;
 using Opsive.Shared.Utility;
 using Opsive.UltimateCharacterController.Inventory;
 using Opsive.UltimateCharacterController.Objects;
 using Opsive.UltimateCharacterController.Objects.CharacterAssist;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -13,64 +15,79 @@ using UnityEngine;
 /// </summary>
 namespace GreedyVox.Networked {
     public class NetworkedItemPickup : ItemPickup, IPayload {
-        private NetworkedItemDrop m_ItemDrop;
-        private NetworkedInfo m_NetworkInfo;
+        private PayloadItemPickup m_Data;
         private TrajectoryObject m_TrajectoryObject;
         /// <summary>
         /// Initialize the default values.
         /// </summary>
         protected override void Awake () {
             base.Awake ();
-            m_NetworkInfo = gameObject.GetCachedComponent<NetworkedInfo> ();
-            m_ItemDrop = gameObject.GetCachedComponent<NetworkedItemDrop> ();
             m_TrajectoryObject = gameObject.GetCachedComponent<TrajectoryObject> ();
         }
         /// <summary>
-        /// Returns the initialization data that is required when the object spawns.
-        /// This allows the remote players to initialize the object correctly.
+        /// Initialize the default sync values.
         /// </summary>
-        /// <returns>The initialization data that is required when the object spawns.</returns>
-        public void Load () {
-            var net = m_TrajectoryObject?.Originator.GetCachedComponent<NetworkObject> ();
-            m_ItemDrop?.NetworkedVariable<PayloadItemPickup> (new PayloadItemPickup () {
+        private void OnEnable () {
+            var net = m_TrajectoryObject?.Originator?.GetCachedComponent<NetworkObject> ();
+            m_Data = new PayloadItemPickup () {
                 ItemCount = m_ItemDefinitionAmounts.Length * 2 + (m_TrajectoryObject != null ? 2 : 0),
-                    ItemID = m_ItemDefinitionAmounts.Select (items => (items.ItemIdentifier as ItemType).ID).ToArray (),
-                    ItemAmounts = m_ItemDefinitionAmounts.Select (items => items.Amount).ToArray (),
-                    OwnerID = net == null ? -1L : (long) net.OwnerClientId,
-                    Velocity = m_TrajectoryObject.Velocity,
-                    Torque = m_TrajectoryObject.Torque,
-            });
+                ItemID = m_ItemDefinitionAmounts.Select (items => (items.ItemIdentifier as ItemType).ID).ToArray (),
+                ItemAmounts = m_ItemDefinitionAmounts.Select (items => items.Amount).ToArray (),
+                OwnerID = net == null ? -1L : (long) net.OwnerClientId,
+                Velocity = m_TrajectoryObject.Velocity,
+                Torque = m_TrajectoryObject.Torque
+            };
         }
         /// <summary>
-        /// The object has been spawned. Initialize the item pickup.
+        /// Returns the maximus size for the fast buffer writer
+        /// </summary>               
+        public int MaxBufferSize () {
+            return sizeof (int) +
+                sizeof (long) +
+                sizeof (float) * 3 * 2 +
+                sizeof (int) * m_Data.ItemCount * 2;
+        }
+        /// <summary>
+        /// The object has been spawned, write the payload data.
         /// </summary>
-        public void Unload<T> (T val, GameObject go) where T : unmanaged {
-            PayloadItemPickup? dat = val as PayloadItemPickup?;
+        public bool Load (out FastBufferWriter writer) {
+            try {
+                using (writer = new FastBufferWriter (MaxBufferSize (), Allocator.Temp))
+                writer.WriteValueSafe (m_Data);
+                return true;
+            } catch (Exception e) {
+                NetworkLog.LogErrorServer (e.Message);
+                return false;
+            }
+        }
+        /// <summary>
+        /// The object has been spawned, read the payload data.
+        /// </summary>
+        public void Unload (ref FastBufferReader reader, GameObject go) {
+            reader.ReadValueSafe (out m_Data);
             // Return the old.
             for (int i = 0; i < m_ItemDefinitionAmounts.Length; i++) {
                 GenericObjectPool.Return (m_ItemDefinitionAmounts[i]);
             }
-            if (dat != null) {
-                // Setup the item counts.
-                var itemDefinitionAmountLength = (dat.Value.ItemCount - (m_TrajectoryObject != null ? 2 : 0)) / 2;
-                if (m_ItemDefinitionAmounts.Length != itemDefinitionAmountLength) {
-                    m_ItemDefinitionAmounts = new ItemDefinitionAmount[itemDefinitionAmountLength];
+            // Setup the item counts.
+            var itemDefinitionAmountLength = (m_Data.ItemCount - (m_TrajectoryObject != null ? 2 : 0)) / 2;
+            if (m_ItemDefinitionAmounts.Length != itemDefinitionAmountLength) {
+                m_ItemDefinitionAmounts = new ItemDefinitionAmount[itemDefinitionAmountLength];
+            }
+            for (int n = 0; n < itemDefinitionAmountLength; n++) {
+                m_ItemDefinitionAmounts[n] = new ItemDefinitionAmount (ItemIdentifierTracker.GetItemIdentifier (
+                    m_Data.ItemID[n]).GetItemDefinition (), m_Data.ItemAmounts[n]);
+            }
+            Initialize (true);
+            // Setup the trajectory object.
+            if (m_TrajectoryObject != null) {
+                var velocity = m_Data.Velocity;
+                var torque = m_Data.Torque;
+                GameObject originator = null;
+                if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue ((ulong) m_Data.OwnerID, out var obj)) {
+                    originator = obj.gameObject;
                 }
-                for (int n = 0; n < itemDefinitionAmountLength; n++) {
-                    m_ItemDefinitionAmounts[n] = new ItemDefinitionAmount (ItemIdentifierTracker.GetItemIdentifier (
-                        dat.Value.ItemID[n]).GetItemDefinition (), dat.Value.ItemAmounts[n]);
-                }
-                Initialize (true);
-                // Setup the trajectory object.
-                if (m_TrajectoryObject != null) {
-                    var velocity = dat.Value.Velocity;
-                    var torque = dat.Value.Torque;
-                    GameObject originator = null;
-                    if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue ((ulong) dat.Value.OwnerID, out var obj)) {
-                        originator = obj.gameObject;
-                    }
-                    m_TrajectoryObject.Initialize (velocity, torque, originator);
-                }
+                m_TrajectoryObject.Initialize (velocity, torque, originator);
             }
         }
     }

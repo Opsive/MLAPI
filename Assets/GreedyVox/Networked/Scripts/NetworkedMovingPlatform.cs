@@ -35,7 +35,7 @@ namespace GreedyVox.Networked {
         private void Start () {
             m_MsgName = $"{m_NetworkInfo.NetworkBehaviourId}MsgClientNetworkedMovingPlatform{m_NetworkInfo.OwnerClientId}";
             if (m_NetworkInfo.IsLocalPlayer)
-                m_CustomMessagingManager.RegisterNamedMessageHandler (m_MsgName, (senderClientId, reader) => {
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (senderClientId, reader) => {
                     ByteUnpacker.ReadValuePacked (reader, out float time);
                     ByteUnpacker.ReadValuePacked (reader, out float delay);
                     ByteUnpacker.ReadValuePacked (reader, out float distance);
@@ -95,7 +95,7 @@ namespace GreedyVox.Networked {
                 BytePacker.WriteValuePacked (writer, m_TargetRotation);
                 BytePacker.WriteValuePacked (writer, m_OriginalRotation);
                 BytePacker.WriteValuePacked (writer, m_Transform.rotation);
-                m_CustomMessagingManager.SendNamedMessage (m_MsgName, id, writer);
+                m_CustomMessagingManager?.SendNamedMessage (m_MsgName, id, writer);
             }
         }
         /// <summary>
