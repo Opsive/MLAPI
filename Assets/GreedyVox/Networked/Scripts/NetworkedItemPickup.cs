@@ -25,9 +25,9 @@ namespace GreedyVox.Networked {
             m_TrajectoryObject = gameObject.GetCachedComponent<TrajectoryObject> ();
         }
         /// <summary>
-        /// Initialize the default sync values.
+        /// Initialize the default data values.
         /// </summary>
-        private void OnEnable () {
+        public void OnNetworkSpawn () {
             var net = m_TrajectoryObject?.Originator?.GetCachedComponent<NetworkObject> ();
             m_Data = new PayloadItemPickup () {
                 ItemCount = m_ItemDefinitionAmounts.Length * 2 + (m_TrajectoryObject != null ? 2 : 0),
@@ -42,10 +42,12 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>               
         public int MaxBufferSize () {
-            return sizeof (int) +
-                sizeof (long) +
-                sizeof (float) * 3 * 2 +
-                sizeof (int) * m_Data.ItemCount * 2;
+            return FastBufferWriter.GetWriteSize (m_Data.ItemCount) +
+                FastBufferWriter.GetWriteSize (m_Data.ItemID) +
+                FastBufferWriter.GetWriteSize (m_Data.ItemAmounts) +
+                FastBufferWriter.GetWriteSize (m_Data.OwnerID) +
+                FastBufferWriter.GetWriteSize (m_Data.Velocity) +
+                FastBufferWriter.GetWriteSize (m_Data.Torque);
         }
         /// <summary>
         /// The object has been spawned, write the payload data.

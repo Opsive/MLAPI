@@ -59,9 +59,8 @@ namespace GreedyVox.Networked.Utilities {
             com = obj.GetComponent<T> ();
             if (com == null) {
                 com = obj.AddComponent<T> ();
-                return true;
             }
-            return false;
+            return com != null;
         }
         public static bool TryRemoveComponent<T> (GameObject obj)
         where T : Component {

@@ -19,6 +19,7 @@ namespace GreedyVox.Networked {
         public override void OnNetworkSpawn () {
             EventHandler.ExecuteEvent (gameObject, "OnRespawn");
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
+            m_Payload.OnNetworkSpawn ();
             if (IsServer) {
                 if (m_Payload.Load (out var writer)) {
                     m_CustomMessagingManager?.SendNamedMessage (MsgNameClient, NetworkManager.Singleton.ConnectedClientsIds, writer);

@@ -45,11 +45,8 @@ public class NetworkedItemPickupInspector : EditorWindow {
             ComponentUtility.TryAddComponent<NetworkedItemPickup> (obj, out var com2)) {
             ComponentUtility.RemoveCopyValues (com1, com2);
         }
+        ComponentUtility.TryAddComponent<NetworkedItemDrop> (obj);
         ComponentUtility.TryAddComponent<NetworkedLocationMonitor> (obj);
         ComponentUtility.TryAddComponent<NetworkedSyncRate> (obj);
-    }
-    private void CopyValues (ItemPickup from, NetworkedItemPickup to) {
-        var json = JsonUtility.ToJson (from);
-        JsonUtility.FromJsonOverwrite (json, to);
     }
 }

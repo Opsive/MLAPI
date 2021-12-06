@@ -73,9 +73,8 @@ namespace GreedyVox.Networked {
                     m_NetworkedMessenger?.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
                 }
             }
-            if (m_NetworkObject == null || !m_NetworkObject.IsSpawned) {
+            if (m_NetworkObject == null) {
                 m_ActiveGameObjects.Remove (obj);
-                ObjectPool.Destroy (obj);
             }
         }
         /// <summary>

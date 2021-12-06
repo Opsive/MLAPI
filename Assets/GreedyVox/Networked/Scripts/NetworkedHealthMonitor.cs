@@ -81,9 +81,11 @@ namespace GreedyVox.Networked {
             // An attacker is not required. If one exists it must have a NetworkObject component attached for identification purposes.
             var attackerID = -1L;
             if (attacker != null) {
-                var attackerObject = attacker.Owner.GetCachedComponent<NetworkObject> ();
+                var attackerObject = attacker.Owner == null ?
+                    attacker.OriginatingGameObject?.GetCachedComponent<NetworkObject> () :
+                    attacker.Owner.GetCachedComponent<NetworkObject> ();
                 if (attackerObject == null) {
-                    Debug.LogError ("Error: The attacker " + attacker.Owner.name + " must have a NetworkObject component.");
+                    Debug.LogErrorFormat ("Error: The attacker {0} must have a NetworkObject component.", attacker?.OriginatingGameObject);
                     return;
                 }
                 attackerID = (long) attackerObject.NetworkObjectId;

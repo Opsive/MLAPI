@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text;
 using GreedyVox.Networked.Data;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Objects;
@@ -15,9 +14,9 @@ namespace GreedyVox.Networked {
     public class NetworkedGrenado : Grenade, IPayload {
         private PayloadGrenado m_Data;
         /// <summary>
-        /// Initialize the default sync values.
+        /// Initialize the default data values.
         /// </summary>
-        protected override void OnEnable () {
+        public void OnNetworkSpawn () {
             base.OnEnable ();
             m_Data = new PayloadGrenado () {
                 ImpactStateName = m_ImpactStateName,
@@ -36,10 +35,15 @@ namespace GreedyVox.Networked {
         /// Returns the maximus size for the fast buffer writer
         /// </summary>
         public int MaxBufferSize () {
-            return sizeof (int) * 2 +
-                sizeof (float) * 4 +
-                sizeof (float) * 3 * 2 +
-                ASCIIEncoding.ASCII.GetByteCount (m_Data.ImpactStateName);
+            return FastBufferWriter.GetWriteSize (m_Data.ImpactStateName) +
+                FastBufferWriter.GetWriteSize (m_Data.Velocity) +
+                FastBufferWriter.GetWriteSize (m_Data.Torque) +
+                FastBufferWriter.GetWriteSize (m_Data.ImpactFrames) +
+                FastBufferWriter.GetWriteSize (m_Data.ImpactLayers) +
+                FastBufferWriter.GetWriteSize (m_Data.ImpactForce) +
+                FastBufferWriter.GetWriteSize (m_Data.DamageAmount) +
+                FastBufferWriter.GetWriteSize (m_Data.ImpactStateDisableTimer) +
+                FastBufferWriter.GetWriteSize (m_Data.ScheduledDeactivation);
         }
         /// <summary>
         /// The object has been spawned, write the payload data.
@@ -50,7 +54,7 @@ namespace GreedyVox.Networked {
                 writer.WriteValueSafe (m_Data);
                 return true;
             } catch (Exception e) {
-                NetworkLog.LogErrorServer (e.Message);
+                NetworkLog.LogErrorServer ($"{e.Message} [Length={writer.Length}/{writer.MaxCapacity}]");
                 return false;
             }
         }

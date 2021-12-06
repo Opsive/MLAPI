@@ -115,10 +115,13 @@ namespace GreedyVox.Networked {
             // The remote character should have the same abilities active.
             for (int i = 0; i < m_CharacterLocomotion.ActiveAbilityCount; i++) {
                 var activeAbility = m_CharacterLocomotion.ActiveAbilities[i];
-                if (IsServer) {
-                    StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serializer (activeAbility.GetNetworkStartData ()));
-                } else {
-                    StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Serializer (activeAbility.GetNetworkStartData ()));
+                var dat = activeAbility?.GetNetworkStartData ();
+                if (dat != null) {
+                    if (IsServer) {
+                        StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serializer (dat));
+                    } else {
+                        StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Serializer (dat));
+                    }
                 }
             }
             for (int i = 0; i < m_CharacterLocomotion.ActiveItemAbilityCount; i++) {
