@@ -118,9 +118,9 @@ namespace GreedyVox.Networked {
                 var dat = activeAbility?.GetNetworkStartData ();
                 if (dat != null) {
                     if (IsServer) {
-                        StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serializer (dat));
+                        StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serialize (dat));
                     } else {
-                        StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Serializer (dat));
+                        StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Serialize (dat));
                     }
                 }
             }
@@ -129,9 +129,9 @@ namespace GreedyVox.Networked {
                 var abilities = activeItemAbility.GetNetworkStartData ();
                 if (abilities != null) {
                     if (IsServer) {
-                        StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (abilities));
+                        StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serialize (abilities));
                     } else {
-                        StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Serializer (abilities));
+                        StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Serialize (abilities));
                     }
                 }
             }
@@ -221,7 +221,7 @@ namespace GreedyVox.Networked {
             var ability = m_CharacterLocomotion.Abilities[abilityIndex];
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
             if (startData != null) {
-                ability.SetNetworkStartData (DeserializerObjectArray.Deserializer (startData));
+                ability.SetNetworkStartData (DeserializerObjectArray.Deserialize (startData));
             }
 #endif
             m_CharacterLocomotion.TryStartAbility (ability, true, true);
@@ -246,7 +246,7 @@ namespace GreedyVox.Networked {
             var itemAbility = m_CharacterLocomotion.ItemAbilities[itemAbilityIndex];
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
             if (startData != null) {
-                itemAbility.SetNetworkStartData (DeserializerObjectArray.Deserializer (startData));
+                itemAbility.SetNetworkStartData (DeserializerObjectArray.Deserialize (startData));
             }
 #endif
             m_CharacterLocomotion.TryStartAbility (itemAbility, true, true);
