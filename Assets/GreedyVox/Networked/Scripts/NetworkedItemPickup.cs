@@ -34,8 +34,8 @@ namespace GreedyVox.Networked {
                 ItemID = m_ItemDefinitionAmounts.Select (items => (items.ItemIdentifier as ItemType).ID).ToArray (),
                 ItemAmounts = m_ItemDefinitionAmounts.Select (items => items.Amount).ToArray (),
                 OwnerID = net == null ? -1L : (long) net.OwnerClientId,
-                Velocity = m_TrajectoryObject.Velocity,
-                Torque = m_TrajectoryObject.Torque
+                Velocity = m_TrajectoryObject == null ? Vector3.zero : m_TrajectoryObject.Velocity,
+                Torque = m_TrajectoryObject == null ? Vector3.zero : m_TrajectoryObject.Torque
             };
         }
         /// <summary>

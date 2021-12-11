@@ -54,14 +54,14 @@ public class NetworkedMenuGUI : NetworkBehaviour {
     private void WindowDisconnect (int id) {
         if (GUILayout.Button ("Host", GUILayout.Width (m_ElementWidth))) {
             StartClient (true);
-            Debug.Log ($"<color=white>Starting Hosting On <b>{m_Transport.ConnectAddress}</b></color>");
+            Debug.Log ($"<color=white>Starting Hosting On <b>{m_Transport?.ConnectAddress}</b></color>");
         } else if (GUILayout.Button ("Client", GUILayout.Width (m_ElementWidth))) {
             StartClient (false);
             NetworkLog.LogInfoServer ($"<color=white>Client <b>{OwnerClientId}</b> Joined</color>");
-            Debug.Log ($"<color=white>Joining Server On <b>{m_Transport.ConnectAddress}</b></color>");
+            Debug.Log ($"<color=white>Joining Server On <b>{m_Transport?.ConnectAddress}</b></color>");
         } else if (GUILayout.Button ("Server", GUILayout.Width (m_ElementWidth))) {
             StartServer ();
-            Debug.Log ($"<color=white>Starting Server On <b>{m_Transport.ConnectAddress}</b></color>");
+            Debug.Log ($"<color=white>Starting Server On <b>{m_Transport?.ConnectAddress}</b></color>");
         } else if (GUILayout.Button ("Exit", GUILayout.Width (m_ElementWidth))) {
             Quit ();
         }
@@ -77,7 +77,7 @@ public class NetworkedMenuGUI : NetworkBehaviour {
                 m_Style.normal.textColor = Color.red;
             }
             if (m_Address.Length > 0) {
-                GUILayout.Label (string.Format ("{0}:{1}", m_Address, m_Transport.ConnectPort),
+                GUILayout.Label (string.Format ("{0}:{1}", m_Address, m_Transport?.ConnectPort),
                     m_Style, GUILayout.Width (m_ElementWidth));
             }
         }

@@ -10,7 +10,7 @@ using UnityEngine;
 /// </summary>
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
-    [RequireComponent (typeof (NetworkedSyncRate))]
+    // [RequireComponent (typeof (NetworkedSyncRate))]
     public class NetworkedLocationMonitor : NetworkBehaviour {
         [Tooltip ("Should the GameObject's active state be syncornized?")]
         [SerializeField] protected bool m_SynchronizeActiveState = true;

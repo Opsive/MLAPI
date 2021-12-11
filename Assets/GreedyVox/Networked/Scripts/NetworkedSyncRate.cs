@@ -34,6 +34,11 @@ namespace GreedyVox.Networked {
                 StartCoroutine (NetworkTimerServer ());
             }
         }
+        public void SetDefaultDistanceCurve () {
+            m_DistanceSendCurve = new AnimationCurve (new Keyframe[2] {
+                new Keyframe (0.0f, 0.0f), new Keyframe (1.0f, 1.0f)
+            });
+        }
         private float GetTimeForLerp (Vector3 pos) {
             return Mathf.Max (m_DistanceSendCurve.Evaluate (Vector3.Distance (m_Transform.position, pos) / m_DistanceSendRange), m_DistanceSendrate);
         }

@@ -34,12 +34,12 @@ public class NetworkedItemPickupInspector : EditorWindow {
         if (ComponentUtility.TryAddComponent<NetworkObject> (obj, out var net)) {
             net.AutoObjectParentSync = false;
         }
-        // Certain components may be necessary if their single player components is added.
-        if (ComponentUtility.TryRemoveComponent<Remover> (obj)) {
-            ComponentUtility.TryAddComponent<NetworkedRemover> (obj);
-        }
         if (ComponentUtility.HasComponent<Respawner> (obj)) {
             ComponentUtility.TryAddComponent<NetworkedRespawnerMonitor> (obj);
+        }
+        if (obj.TryGetComponent<Remover> (out var rem1) &&
+            ComponentUtility.TryAddComponent<NetworkedRemover> (obj, out var rem2)) {
+            ComponentUtility.RemoveCopyValues (rem1, rem2);
         }
         if (obj.TryGetComponent<ItemPickup> (out var com1) &&
             ComponentUtility.TryAddComponent<NetworkedItemPickup> (obj, out var com2)) {
@@ -47,6 +47,8 @@ public class NetworkedItemPickupInspector : EditorWindow {
         }
         ComponentUtility.TryAddComponent<NetworkedItemDrop> (obj);
         ComponentUtility.TryAddComponent<NetworkedLocationMonitor> (obj);
-        ComponentUtility.TryAddComponent<NetworkedSyncRate> (obj);
+        if (ComponentUtility.TryAddComponent<NetworkedSyncRate> (obj, out var cuv)) {
+            cuv.SetDefaultDistanceCurve ();
+        }
     }
 }

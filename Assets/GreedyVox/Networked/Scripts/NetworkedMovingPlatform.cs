@@ -10,48 +10,61 @@ using UnityEngine;
 /// Syncronizes the moving platform when a new player joins the room.
 /// </summary>
 namespace GreedyVox.Networked {
+    [DisallowMultipleComponent]
+    [RequireComponent (typeof (NetworkObject), typeof (NetworkedInfo), typeof (NetworkedEvent))]
     public class NetworkedMovingPlatform : MovingPlatform {
         private string m_MsgName;
         private NetworkedInfo m_NetworkInfo;
-        private NetworkTransport m_Transport;
+        private NetworkedEvent m_NetworkEvent;
         private NetworkedSettingsAbstract m_Settings;
         private CustomMessagingManager m_CustomMessagingManager;
         protected override void Awake () {
             base.Awake ();
             m_NetworkInfo = GetComponent<NetworkedInfo> ();
+            m_NetworkEvent = GetComponent<NetworkedEvent> ();
             m_Settings = NetworkedManager.Instance.NetworkSettings;
-            m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
-            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
-        }
-        /// <summary>
-        /// The object has been enabled.
-        /// </summary>
-        protected override void OnEnable () {
-            base.OnEnable ();
-            if (m_NetworkInfo != null && m_NetworkInfo.IsServerHost ()) {
-                NetworkManager.Singleton.OnClientConnectedCallback += ID => { OnEvent (ID); };
+            if (m_NetworkEvent != null) {
+                m_NetworkEvent.NetworkSpawnEvent += OnNetworkSpawn;
+                m_NetworkEvent.NetworkDespawnEvent += OnNetworkDespawn;
             }
         }
-        private void Start () {
+        /// <summary>
+        /// The object has been despawned.
+        /// </summary>
+        private void OnNetworkDespawn () {
+            NetworkManager.Singleton.OnClientConnectedCallback -= OnEvent;
+
+        }
+        /// <summary>
+        /// The object has been spawned.
+        /// </summary>
+        private void OnNetworkSpawn () {
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
             m_MsgName = $"{m_NetworkInfo.NetworkBehaviourId}MsgClientNetworkedMovingPlatform{m_NetworkInfo.OwnerClientId}";
-            if (m_NetworkInfo.IsLocalPlayer)
-                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (senderClientId, reader) => {
-                    ByteUnpacker.ReadValuePacked (reader, out float time);
-                    ByteUnpacker.ReadValuePacked (reader, out float delay);
-                    ByteUnpacker.ReadValuePacked (reader, out float distance);
-                    ByteUnpacker.ReadValuePacked (reader, out int state);
-                    ByteUnpacker.ReadValuePacked (reader, out int point);
-                    ByteUnpacker.ReadValuePacked (reader, out int direction);
-                    ByteUnpacker.ReadValuePacked (reader, out int previous);
-                    ByteUnpacker.ReadValuePacked (reader, out int count);
-                    ByteUnpacker.ReadValuePacked (reader, out Vector3 target);
-                    ByteUnpacker.ReadValuePacked (reader, out Vector3 position);
-                    ByteUnpacker.ReadValuePacked (reader, out Quaternion facing);
-                    ByteUnpacker.ReadValuePacked (reader, out Quaternion original);
-                    ByteUnpacker.ReadValuePacked (reader, out Quaternion rotation);
-                    InitializeMovingPlatformClientRpc (position, rotation, state, direction,
-                        point, previous, distance, delay, original, time, target, facing, count);
-                });
+            if (m_NetworkInfo != null) {
+                if (m_NetworkInfo.IsServerHost ()) {
+                    // NetworkManager.Singleton.OnClientConnectedCallback += ID => { OnEvent (ID); };
+                    NetworkManager.Singleton.OnClientConnectedCallback += OnEvent;
+                } else {
+                    m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (senderClientId, reader) => {
+                        ByteUnpacker.ReadValuePacked (reader, out float time);
+                        ByteUnpacker.ReadValuePacked (reader, out float delay);
+                        ByteUnpacker.ReadValuePacked (reader, out float distance);
+                        ByteUnpacker.ReadValuePacked (reader, out int state);
+                        ByteUnpacker.ReadValuePacked (reader, out int point);
+                        ByteUnpacker.ReadValuePacked (reader, out int direction);
+                        ByteUnpacker.ReadValuePacked (reader, out int previous);
+                        ByteUnpacker.ReadValuePacked (reader, out int count);
+                        ByteUnpacker.ReadValuePacked (reader, out Vector3 target);
+                        ByteUnpacker.ReadValuePacked (reader, out Vector3 position);
+                        ByteUnpacker.ReadValuePacked (reader, out Quaternion facing);
+                        ByteUnpacker.ReadValuePacked (reader, out Quaternion original);
+                        ByteUnpacker.ReadValuePacked (reader, out Quaternion rotation);
+                        InitializeMovingPlatformClientRpc (position, rotation, state, direction,
+                            point, previous, distance, delay, original, time, target, facing, count);
+                    });
+                }
+            }
         }
         /// <summary>
         /// A event from the server has been sent.
@@ -133,7 +146,7 @@ namespace GreedyVox.Networked {
 
             // There will be a small amount of lag between the time that the RPC was sent on the server and the time that it was received on the client.
             // Make up for this difference by simulating the movement for the lag difference.
-            var lag = Mathf.Abs (m_Transport.GetCurrentRtt (NetworkManager.Singleton.ServerClientId));
+            var lag = Mathf.Abs (NetworkManager.Singleton.ServerTime.TimeAsFloat - NetworkManager.Singleton.LocalTime.TimeAsFloat);
             var startTime = Time.time;
 
             var elapsedTime = 0f;
