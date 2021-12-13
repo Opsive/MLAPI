@@ -150,6 +150,7 @@ namespace GreedyVox.Networked {
                         m_CustomMessagingManager?.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
                     }
                 }
+                m_Flag = 0;
             }
         }
         /// <summary>

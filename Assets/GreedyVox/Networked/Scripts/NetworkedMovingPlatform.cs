@@ -33,7 +33,6 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void OnNetworkDespawn () {
             NetworkManager.Singleton.OnClientConnectedCallback -= OnEvent;
-
         }
         /// <summary>
         /// The object has been spawned.

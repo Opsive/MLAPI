@@ -30,15 +30,14 @@ namespace GreedyVox.Networked {
         private byte m_Flag;
         private int m_MaxBufferSize;
         private bool m_InitialSync = true;
-        private NetworkObject m_Platform;
-        private NetworkedInfo m_NetworkInfo;
+        private Transform m_Transform;
         private IReadOnlyList<ulong> m_Clients;
         private ulong m_PlatformID, m_ServerID;
         private NetworkedManager m_NetworkManager;
         private FastBufferWriter m_FastBufferWriter;
         private string m_MsgNameClient, m_MsgNameServer;
-        private Transform m_NetworkPlatform, m_Transform;
         private float m_NetworkedTime, m_Distance, m_Angle;
+        private CharacterFootEffects m_CharacterFootEffects;
         private CustomMessagingManager m_CustomMessagingManager;
         private UltimateCharacterLocomotion m_CharacterLocomotion;
         private Quaternion m_NetworkPlatformPrevRotationOffset, m_NetworkPlatformRotationOffset, m_NetworkRotation;
@@ -53,7 +52,7 @@ namespace GreedyVox.Networked {
             m_NetworkPosition = m_Transform.position;
             m_NetworkRotation = m_Transform.rotation;
             m_NetworkManager = NetworkedManager.Instance;
-            m_NetworkInfo = gameObject.GetCachedComponent<NetworkedInfo> ();
+            m_CharacterFootEffects = gameObject.GetCachedComponent<CharacterFootEffects> ();
             m_CharacterLocomotion = gameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
 
             EventHandler.RegisterEvent (gameObject, "OnRespawn", OnRespawn);
@@ -140,6 +139,7 @@ namespace GreedyVox.Networked {
                         m_CustomMessagingManager?.SendNamedMessage (m_MsgNameClient, m_Clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
                     }
                 }
+                m_Flag = 0;
             }
         }
         /// <summary>
@@ -149,14 +149,23 @@ namespace GreedyVox.Networked {
             // When the character is on a moving platform the position and rotation is relative to that platform.
             // This allows the character to stay on the platform even though the platform will not be in the exact same location between any two instances.
             var serializationRate = m_NetworkManager.NetworkSettings.SyncRateClient * m_RemoteInterpolationMultiplayer;
-            if (m_NetworkPlatform != null) {
-                m_NetworkPlatformPrevRelativePosition = Vector3.MoveTowards (m_NetworkPlatformPrevRelativePosition,
-                    m_NetworkPlatformRelativePosition, m_Distance * serializationRate);
-                m_CharacterLocomotion.SetPosition (m_NetworkPlatform.TransformPoint (m_NetworkPlatformPrevRelativePosition), false);
-                m_NetworkPlatformPrevRotationOffset = Quaternion.RotateTowards (m_NetworkPlatformPrevRotationOffset,
-                    m_NetworkPlatformRotationOffset, m_Angle * serializationRate);
-                m_CharacterLocomotion.SetRotation (MathUtility.TransformQuaternion (m_NetworkPlatform.rotation, m_NetworkPlatformPrevRotationOffset), false);
-            } else if (m_Transform != null) {
+            if (m_CharacterLocomotion.Platform != null) {
+#if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
+                if (m_CharacterFootEffects != null && (m_NetworkPlatformPrevRelativePosition - m_NetworkPlatformRelativePosition).sqrMagnitude > 0.01f) {
+                    m_CharacterFootEffects.CanPlaceFootstep = true;
+                }
+#endif
+                m_NetworkPlatformPrevRelativePosition = Vector3.MoveTowards (m_NetworkPlatformPrevRelativePosition, m_NetworkPlatformRelativePosition, m_Distance * serializationRate);
+                m_CharacterLocomotion.SetPosition (m_CharacterLocomotion.Platform.TransformPoint (m_NetworkPlatformPrevRelativePosition), false);
+
+                m_NetworkPlatformPrevRotationOffset = Quaternion.RotateTowards (m_NetworkPlatformPrevRotationOffset, m_NetworkPlatformRotationOffset, m_Angle * serializationRate);
+                m_CharacterLocomotion.SetRotation (MathUtility.TransformQuaternion (m_CharacterLocomotion.Platform.rotation, m_NetworkPlatformPrevRotationOffset), false);
+            } else {
+#if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
+                if (m_CharacterFootEffects != null && (m_Transform.position - m_NetworkPosition).sqrMagnitude > 0.01f) {
+                    m_CharacterFootEffects.CanPlaceFootstep = true;
+                }
+#endif
                 m_Transform.position = Vector3.MoveTowards (m_Transform.position, m_NetworkPosition, m_Distance * serializationRate);
                 m_Transform.rotation = Quaternion.RotateTowards (m_Transform.rotation, m_NetworkRotation, m_Angle * serializationRate);
             }
@@ -168,24 +177,30 @@ namespace GreedyVox.Networked {
         public void Serialize (ref FastBufferReader reader) {
             ByteUnpacker.ReadValuePacked (reader, out m_Flag);
             if ((m_Flag & (byte) TransformDirtyFlags.Platform) != 0) {
-                ByteUnpacker.ReadValuePacked (reader, out ulong platformID);
+                ByteUnpacker.ReadValuePacked (reader, out ulong pid);
                 // When the character is on a platform the position and rotation is relative to that platform.
                 if ((m_Flag & (byte) TransformDirtyFlags.Position) != 0)
                     ByteUnpacker.ReadValuePacked (reader, out m_NetworkPlatformRelativePosition);
-                if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0)
-                    ByteUnpacker.ReadValuePacked (reader, out m_NetworkPlatformRotationOffset);
+                if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0) {
+                    ByteUnpacker.ReadValuePacked (reader, out Vector3 angle);
+                    m_NetworkPlatformRotationOffset = Quaternion.Euler (angle);
+                }
                 // Do not do any sort of interpolation when the platform has changed.
-                if (platformID != m_PlatformID && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue (platformID, out m_Platform)) {
-                    m_NetworkPlatform = m_Platform.transform;
+                if (pid != m_PlatformID && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue (pid, out var platform)) {
+                    m_PlatformID = pid;
+                    m_CharacterLocomotion.SetPlatform (platform.transform, true);
                     m_NetworkPlatformRelativePosition = m_NetworkPlatformPrevRelativePosition =
-                        m_NetworkPlatform.InverseTransformPoint (m_Transform.position);
+                        platform.transform.InverseTransformPoint (m_Transform.position);
                     m_NetworkPlatformRotationOffset = m_NetworkPlatformPrevRotationOffset =
-                        MathUtility.InverseTransformQuaternion (m_NetworkPlatform.rotation, m_Transform.rotation);
+                        MathUtility.InverseTransformQuaternion (platform.transform.rotation, m_Transform.rotation);
                 }
                 m_Distance = Vector3.Distance (m_NetworkPlatformPrevRelativePosition, m_NetworkPlatformRelativePosition);
                 m_Angle = Quaternion.Angle (m_NetworkPlatformPrevRotationOffset, m_NetworkPlatformRotationOffset);
-                m_PlatformID = platformID;
             } else {
+                if (m_PlatformID != 0) {
+                    m_PlatformID = 0;
+                    m_CharacterLocomotion.SetPlatform (null, true);
+                }
                 if ((m_Flag & (byte) TransformDirtyFlags.Position) != 0) {
                     ByteUnpacker.ReadValuePacked (reader, out m_NetworkPosition);
                     ByteUnpacker.ReadValuePacked (reader, out Vector3 velocity);
@@ -215,20 +230,21 @@ namespace GreedyVox.Networked {
         /// <param name="stream">The stream that is being written to.</param>
         public bool Serialize (ref byte flag) {
             // When the character is on a platform the position and rotation is relative to that platform.
-            if (m_CharacterLocomotion.Platform != null) {
-                var platform = m_CharacterLocomotion.Platform.gameObject.GetCachedComponent<NetworkObject> ();
-                if (platform == null) {
-                    Debug.LogError ("Error: The platform " + m_CharacterLocomotion.Platform + " must have a PhotonView.");
-                } else {
-                    // Write flag as dirty
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, flag);
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, platform.OwnerClientId);
-                    if ((flag & (byte) TransformDirtyFlags.Position) != 0)
-                        BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkPosition);
-                    if ((flag & (byte) TransformDirtyFlags.Rotation) != 0)
-                        BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkRotation.eulerAngles);
+            if ((m_Flag & (byte) TransformDirtyFlags.Platform) != 0) {
+                // Write flag as dirty
+                BytePacker.WriteValuePacked (m_FastBufferWriter, flag);
+                BytePacker.WriteValuePacked (m_FastBufferWriter, m_PlatformID);
+                // Update network position here to insure that local or server calculate the platform inverse transform point.
+                if ((flag & (byte) TransformDirtyFlags.Position) != 0) {
+                    m_NetworkPosition = m_CharacterLocomotion.Platform.InverseTransformPoint (m_Transform.position);
+                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkPosition);
                 }
-            } else if (m_Transform != null) {
+                // Update network rotation here to insure that local or server calculate the platform inverse transform quaternion.
+                if ((flag & (byte) TransformDirtyFlags.Rotation) != 0) {
+                    m_NetworkRotation = MathUtility.InverseTransformQuaternion (m_CharacterLocomotion.Platform.rotation, m_Transform.rotation);
+                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkRotation.eulerAngles);
+                }
+            } else {
                 // Write flag as dirty
                 BytePacker.WriteValuePacked (m_FastBufferWriter, flag);
                 if ((flag & (byte) TransformDirtyFlags.Position) != 0) {
@@ -248,57 +264,36 @@ namespace GreedyVox.Networked {
         /// <param name="stream">The stream that is being written to.</param>
         public bool Serialize () {
             m_Flag = 0;
-            if (m_SynchronizeScale && m_Transform != null && m_Transform.localScale != m_NetworkScale)
-                m_Flag |= (byte) TransformDirtyFlags.Scale;
             // When the character is on a platform the position and rotation is relative to that platform.
             if (m_CharacterLocomotion.Platform != null) {
                 var platform = m_CharacterLocomotion.Platform.gameObject.GetCachedComponent<NetworkObject> ();
                 if (platform == null) {
-                    Debug.LogError ("Error: The platform " + m_CharacterLocomotion.Platform + " must have a PhotonView.");
+                    Debug.LogError ("Error: The platform " + m_CharacterLocomotion.Platform + " must have a NetworkObject.");
                 } else {
                     // Determine the changed objects before sending them.
                     m_Flag |= (byte) TransformDirtyFlags.Platform;
-                    var position = m_CharacterLocomotion.Platform.InverseTransformPoint (m_Transform.position);
-                    var rotation = MathUtility.InverseTransformQuaternion (m_CharacterLocomotion.Platform.rotation, m_Transform.rotation);
-                    if (position != m_NetworkPosition) {
+                    m_PlatformID = platform.NetworkObjectId;
+                    if (m_CharacterLocomotion.Platform.InverseTransformPoint (m_Transform.position) != m_NetworkPosition)
                         m_Flag |= (byte) TransformDirtyFlags.Position;
-                        m_NetworkPosition = position;
-                    }
-                    if (rotation != m_NetworkRotation) {
+                    if (MathUtility.InverseTransformQuaternion (m_CharacterLocomotion.Platform.rotation, m_Transform.rotation) != m_NetworkRotation)
                         m_Flag |= (byte) TransformDirtyFlags.Rotation;
-                        m_NetworkRotation = rotation;
-                    }
-                    // Write m_Flag as dirty
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, platform.OwnerClientId);
-                    if ((m_Flag & (byte) TransformDirtyFlags.Position) != 0)
-                        BytePacker.WriteValuePacked (m_FastBufferWriter, position);
-                    if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0)
-                        BytePacker.WriteValuePacked (m_FastBufferWriter, rotation.eulerAngles);
                 }
             } else if (m_Transform != null) {
                 // Determine the changed objects before sending them.
-                if (m_Transform.position != m_NetworkPosition)
+                if (m_Transform.position != m_NetworkPosition) {
                     m_Flag |= (byte) TransformDirtyFlags.Position;
-                if (m_Transform.rotation != m_NetworkRotation)
-                    m_Flag |= (byte) TransformDirtyFlags.Rotation;
-                // Write m_Flag as dirty
-                BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
-                if ((m_Flag & (byte) TransformDirtyFlags.Position) != 0) {
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_Transform.position);
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_Transform.position - m_NetworkPosition);
                     m_NetworkPosition = m_Transform.position;
                 }
-                if ((m_Flag & (byte) TransformDirtyFlags.Rotation) != 0) {
-                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_Transform.eulerAngles);
+                if (m_Transform.rotation != m_NetworkRotation) {
+                    m_Flag |= (byte) TransformDirtyFlags.Rotation;
                     m_NetworkRotation = m_Transform.rotation;
                 }
             }
-            if ((m_Flag & (byte) TransformDirtyFlags.Scale) != 0) {
-                BytePacker.WriteValuePacked (m_FastBufferWriter, m_Transform.localScale);
+            if (m_SynchronizeScale && m_Transform != null && m_Transform.localScale != m_NetworkScale) {
+                m_Flag |= (byte) TransformDirtyFlags.Scale;
                 m_NetworkScale = m_Transform.localScale;
             }
-            return m_Flag > 0;
+            return Serialize (ref m_Flag);
         }
         /// <summary>
         /// The character has respawned.
