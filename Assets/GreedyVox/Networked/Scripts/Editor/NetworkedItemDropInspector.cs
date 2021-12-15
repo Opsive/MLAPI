@@ -6,11 +6,11 @@ using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
-public class NetworkedItemPickupInspector : EditorWindow {
+public class NetworkedItemDropInspector : EditorWindow {
     private Object m_NetworkItem;
-    [MenuItem ("Tools/GreedyVox/Networked/Item Pickup Inspector")]
-    private static NetworkedItemPickupInspector Init () {
-        return EditorWindow.GetWindowWithRect<NetworkedItemPickupInspector> (
+    [MenuItem ("Tools/GreedyVox/Networked/Item Drop Inspector")]
+    private static NetworkedItemDropInspector Init () {
+        return EditorWindow.GetWindowWithRect<NetworkedItemDropInspector> (
             new Rect (Screen.width - 300 / 2, Screen.height - 200 / 2, 300, 200), true, "Network Item Pickup");
     }
     private void OnGUI () {
@@ -34,9 +34,6 @@ public class NetworkedItemPickupInspector : EditorWindow {
         if (ComponentUtility.TryAddComponent<NetworkObject> (obj, out var net)) {
             net.AutoObjectParentSync = false;
         }
-        if (ComponentUtility.HasComponent<Respawner> (obj)) {
-            ComponentUtility.TryAddComponent<NetworkedRespawnerMonitor> (obj);
-        }
         if (obj.TryGetComponent<Remover> (out var rem1) &&
             ComponentUtility.TryAddComponent<NetworkedRemover> (obj, out var rem2)) {
             ComponentUtility.RemoveCopyValues (rem1, rem2);
@@ -44,6 +41,11 @@ public class NetworkedItemPickupInspector : EditorWindow {
         if (obj.TryGetComponent<ItemPickup> (out var com1) &&
             ComponentUtility.TryAddComponent<NetworkedItemPickup> (obj, out var com2)) {
             ComponentUtility.RemoveCopyValues (com1, com2);
+        }
+        ComponentUtility.TryAddComponent<NetworkedItemDrop> (obj);
+        ComponentUtility.TryAddComponent<NetworkedLocationMonitor> (obj);
+        if (ComponentUtility.TryAddComponent<NetworkedSyncRate> (obj, out var cuv)) {
+            cuv.SetDefaultDistanceCurve ();
         }
     }
 }

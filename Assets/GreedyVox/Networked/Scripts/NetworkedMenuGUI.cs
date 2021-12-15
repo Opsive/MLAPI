@@ -32,6 +32,10 @@ public class NetworkedMenuGUI : NetworkBehaviour {
         } else {
             if (Event.current.isKey && Event.current.keyCode == KeyCode.Escape) {
                 Quit ();
+            } else if (Event.current.isKey && Event.current.keyCode == KeyCode.H) {
+                StartClient (true);
+            } else if (Event.current.isKey && Event.current.keyCode == KeyCode.C) {
+                StartClient (false);
             } else {
                 m_WindowDisconnect = GUILayout.Window (2, m_WindowDisconnect, WindowDisconnect, "Press Escape To Quit");
             }

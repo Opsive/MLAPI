@@ -137,7 +137,7 @@ namespace GreedyVox.Networked {
         /// </summary>
         private int MaxBufferSize () {
             return sizeof (bool) * 2 + sizeof (short) * 2 + sizeof (int) * 4 +
-                sizeof (float) * 6 + sizeof (int) * ParameterSlotCount * 3;
+                sizeof (float) * 6 + sizeof (int) * (ItemSlotID == null ? 0 : ParameterSlotCount) * 3;
         }
         /// <summary>
         /// Network sync event called from the NetworkInfo component
@@ -302,7 +302,7 @@ namespace GreedyVox.Networked {
                 ByteUnpacker.ReadValuePacked (reader, out m_NetworkAbilityFloatData);
             if (HasItemParameters) {
                 int id, state, index;
-                ByteUnpacker.ReadValuePacked (reader, out short slot);
+                ByteUnpacker.ReadValuePacked (reader, out byte slot);
                 for (int i = 0; i < ParameterSlotCount; i++) {
                     if ((slot & (i + 1)) != 0) {
                         ByteUnpacker.ReadValuePacked (reader, out id);
