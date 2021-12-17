@@ -11,8 +11,8 @@ namespace GreedVox.Networked.Collections {
             /// <summary>
             /// Delegate type for dictionary changed event
             /// </summary>
-            /// <param name="changeEvent">Struct containing information about the change event</param>
-            public delegate void OnDictionaryChangedDelegate (NetworkedDictionaryEvent<TK, TV> changeEvent);
+            /// <param name="e">Struct containing information about the change event</param>
+            public delegate void OnDictionaryChangedDelegate (NetworkedDictionaryEvent<TK, TV> e);
             /// <summary>
             /// The callback to be invoked when the dictionary gets changed
             /// </summary>

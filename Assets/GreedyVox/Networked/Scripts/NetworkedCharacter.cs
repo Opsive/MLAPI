@@ -22,8 +22,7 @@ namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedCharacter : NetworkBehaviour, INetworkCharacter {
         private GameObject m_GameObject;
-        // private NetworkedManager m_NetworkManager;
-        private Dictionary<ulong, NetworkObject> m_NetworkObjects;
+        private NetworkedManager m_NetworkManager;
         private UltimateCharacterLocomotion m_CharacterLocomotion;
         private InventoryBase m_Inventory;
         private bool m_ItemsPickedUp;
@@ -32,6 +31,7 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GameObject = gameObject;
+            m_NetworkManager = NetworkedManager.Instance;
             m_Inventory = m_GameObject.GetCachedComponent<InventoryBase> ();
             m_CharacterLocomotion = m_GameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
         }
@@ -51,32 +51,51 @@ namespace GreedyVox.Networked {
         /// </summary>
         public override void OnDestroy () {
             base.OnDestroy ();
-            EventHandler.ExecuteEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", null);
             EventHandler.UnregisterEvent<Ability, bool> (m_GameObject, "OnCharacterAbilityActive", AbilityActive);
             EventHandler.UnregisterEvent<ItemAbility, bool> (m_GameObject, "OnCharacterItemAbilityActive", ItemAbilityActive);
-            if (m_CharacterLocomotion.LookSource != null && m_CharacterLocomotion.LookSource.GameObject != null) {
-                // The local character has left the room. The character no longer has a look source.
-                var cameraController = m_CharacterLocomotion.LookSource.GameObject.GetComponent<CameraController> ();
-                if (cameraController != null) {
-                    cameraController.Character = null;
-                }
-            }
+        }
+        /// <summary>
+        /// The object has been despawned.
+        /// </summary>
+        public override void OnNetworkDespawn () {
+            m_NetworkManager.PlayerConnectedEvent -= OnPlayerConnectedEvent;
+            m_NetworkManager.PlayerDisconnectedEvent -= OnPlayerDisconnectedEvent;
         }
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup.
         /// </summary>
         public override void OnNetworkSpawn () {
-            m_NetworkObjects = NetworkManager.Singleton.SpawnManager.SpawnedObjects;
+            if (IsServer) {
+                m_NetworkManager.PlayerConnectedEvent += OnPlayerConnectedEvent;
+                m_NetworkManager.PlayerDisconnectedEvent += OnPlayerDisconnectedEvent;
+            }
+        }
+        /// <summary>
+        /// A player has disconnected. Perform any cleanup.
+        /// </summary>
+        /// <param name="player">The Player networking ID that disconnected.</param>
+        private void OnPlayerDisconnectedEvent (ulong id) {
+            if (OwnerClientId == id && m_CharacterLocomotion.LookSource != null &&
+                m_CharacterLocomotion.LookSource.GameObject != null) {
+                // The local character has disconnected. The character no longer has a look source.
+                var cameraController = m_CharacterLocomotion.LookSource.GameObject.GetComponent<CameraController> ();
+                if (cameraController != null) {
+                    cameraController.Character = null;
+                }
+                EventHandler.ExecuteEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", null);
+            }
+        }
+        /// <summary>
+        /// A player has joined. Ensure the joining player is in sync with the current game state.
+        /// </summary>
+        /// <param name="id">The Player networking ID that connected.</param>
+        private void OnPlayerConnectedEvent (ulong id) {
             // Notify the joining player of the ItemIdentifiers that the player has within their inventory.
             if (m_Inventory != null) {
                 var items = m_Inventory.GetAllItems ();
                 for (int i = 0; i < items.Count; i++) {
                     var item = items[i];
-                    if (IsServer) {
-                        PickupItemIdentifierClientRpc (item.ItemIdentifier.ID, m_Inventory.GetItemIdentifierAmount (item.ItemIdentifier));
-                    } else {
-                        PickupItemIdentifierServerRpc (item.ItemIdentifier.ID, m_Inventory.GetItemIdentifierAmount (item.ItemIdentifier));
-                    }
+                    PickupItemIdentifierClientRpc (item.ItemIdentifier.ID, m_Inventory.GetItemIdentifierAmount (item.ItemIdentifier));
                     // Usable Items have a separate ItemIdentifiers amount.
                     if (item.DropPrefab != null) {
                         var itemActions = item.ItemActions;
@@ -85,13 +104,8 @@ namespace GreedyVox.Networked {
                             if (usableItem != null) {
                                 var consumableItemIdentifierAmount = usableItem.GetConsumableItemIdentifierAmount ();
                                 if (consumableItemIdentifierAmount > 0 || consumableItemIdentifierAmount == -1) { // -1 is used by the grenade to indicate that there is only one item.
-                                    if (IsServer) {
-                                        PickupUsableItemActionClientRpc (item.ItemIdentifier.ID, item.SlotID, itemActions[j].ID,
-                                            m_Inventory.GetItemIdentifierAmount (usableItem.GetConsumableItemIdentifier ()), consumableItemIdentifierAmount);
-                                    } else {
-                                        PickupUsableItemActionServerRpc (item.ItemIdentifier.ID, item.SlotID, itemActions[j].ID,
-                                            m_Inventory.GetItemIdentifierAmount (usableItem.GetConsumableItemIdentifier ()), consumableItemIdentifierAmount);
-                                    }
+                                    PickupUsableItemActionClientRpc (item.ItemIdentifier.ID, item.SlotID, itemActions[j].ID,
+                                        m_Inventory.GetItemIdentifierAmount (usableItem.GetConsumableItemIdentifier ()), consumableItemIdentifierAmount);
                                 }
                             }
                         }
@@ -101,15 +115,10 @@ namespace GreedyVox.Networked {
                 for (int i = 0; i < m_Inventory.SlotCount; i++) {
                     var item = m_Inventory.GetActiveItem (i);
                     if (item != null) {
-                        if (IsServer) {
-                            EquipUnequipItemClientRpc (item.ItemIdentifier.ID, i, true);
-                        } else {
-                            EquipUnequipItemServerRpc (item.ItemIdentifier.ID, i, true);
-                        }
+                        EquipUnequipItemClientRpc (item.ItemIdentifier.ID, i, true);
                     }
                 }
             }
-
             // ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER will be defined, but it is required here to allow the add-on to be compiled for the first time.
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
             // The remote character should have the same abilities active.
@@ -117,22 +126,14 @@ namespace GreedyVox.Networked {
                 var activeAbility = m_CharacterLocomotion.ActiveAbilities[i];
                 var dat = activeAbility?.GetNetworkStartData ();
                 if (dat != null) {
-                    if (IsServer) {
-                        StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serialize (dat));
-                    } else {
-                        StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Serialize (dat));
-                    }
+                    StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serialize (dat));
                 }
             }
             for (int i = 0; i < m_CharacterLocomotion.ActiveItemAbilityCount; i++) {
                 var activeItemAbility = m_CharacterLocomotion.ActiveItemAbilities[i];
                 var abilities = activeItemAbility.GetNetworkStartData ();
                 if (abilities != null) {
-                    if (IsServer) {
-                        StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serialize (abilities));
-                    } else {
-                        StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Serialize (abilities));
-                    }
+                    StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serialize (abilities));
                 }
             }
 #endif
@@ -436,7 +437,7 @@ namespace GreedyVox.Networked {
 
         [ClientRpc]
         private void ItemIdentifierPickupClientRpc (uint itemIdentifierID, int amount, int slotID, bool immediatePickup, bool forceEquip) {
-            if (!IsHost) { ItemIdentifierPickupRpc (itemIdentifierID, amount, slotID, immediatePickup, forceEquip); }
+            if (!IsOwner) { ItemIdentifierPickupRpc (itemIdentifierID, amount, slotID, immediatePickup, forceEquip); }
         }
         /// <summary>
         /// Removes all of the items from the inventory.

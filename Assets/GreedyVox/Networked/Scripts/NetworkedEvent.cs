@@ -23,13 +23,13 @@ namespace GreedyVox.Networked {
         /// The player connection disconnected.
         /// </summary>
         public override void OnNetworkDespawn () {
-            if (NetworkDespawnEvent != null) { NetworkDespawnEvent (); }
+            NetworkDespawnEvent?.Invoke ();
         }
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup.
         /// </summary>
         public override void OnNetworkSpawn () {
-            if (NetworkSpawnEvent != null) { NetworkSpawnEvent (); }
+            NetworkSpawnEvent?.Invoke ();
             m_ServerID = NetworkManager.Singleton.ServerClientId;
             m_Transport = NetworkManager.Singleton.NetworkConfig.NetworkTransport;
             if (IsLocalPlayer && m_Transport != null && m_Coroutine == null) {
