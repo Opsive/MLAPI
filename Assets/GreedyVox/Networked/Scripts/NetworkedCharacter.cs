@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using GreedyVox.Networked.Utilities;
+﻿using GreedyVox.Networked.Utilities;
 using Opsive.Shared.Events;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Camera;

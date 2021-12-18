@@ -12,7 +12,7 @@ namespace GreedyVox.Networked {
             m_Transform = tran;
         }
         public void Destroy (NetworkObject net) {
-            NetworkedObjectPool.Destroy (net?.gameObject);
+            ObjectPool.Destroy (net.gameObject);
         }
         public NetworkObject Instantiate (ulong ID, Vector3 pos, Quaternion rot) {
             var go = ObjectPool.Instantiate (m_Prefab, pos, rot, m_Transform);
