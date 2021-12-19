@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Serialization.Pooled;
+using GreedyVox.Networked.Utilities;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Networking.Game;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -11,23 +11,27 @@ using UnityEngine;
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedObjectPool : NetworkObjectPool {
-        [SerializeField] private NetworkedMessenger m_NetworkedMessenger = default;
         [Tooltip ("An array of objects that can be spawned over the network. Any object that can be spawned on the network must be within this list.")]
+        [SerializeField] private List<GameObject> m_SpawnablePrefabs = new List<GameObject> ();
+        private HashSet<GameObject> m_SpawnableGameObjects = new HashSet<GameObject> ();
         private NetworkObject m_NetworkObject;
-        private NetworkedSettingsAbstract m_Settings;
+        private HashSet<GameObject> m_ActiveGameObjects = new HashSet<GameObject> ();
         private HashSet<GameObject> m_SpawnedGameObjects = new HashSet<GameObject> ();
         private Dictionary<string, GameObject> m_ResourceCache = new Dictionary<string, GameObject> ();
-        private Dictionary<GameObject, int> m_SpawnableGameObjectIDMap = new Dictionary<GameObject, int> ();
-        private Dictionary<GameObject, ISpawnDataObject> m_ActiveGameObjects = new Dictionary<GameObject, ISpawnDataObject> ();
         /// Initialize the default values.
         /// </summary>
         private void Start () {
-            m_Settings = NetworkedManager.Instance.NetworkSettings;
-            var objs = NetworkManager.Singleton.NetworkConfig.NetworkPrefabs;
-            for (int i = 0; i < objs.Count; i++) {
-                if (objs[i] != null) {
-                    m_SpawnableGameObjectIDMap.Add (objs[i].Prefab, i);
-                }
+            for (int n = 0; n < m_SpawnablePrefabs.Count; n++) { SetupSpawnManager (m_SpawnablePrefabs[n], false); }
+            var pool = FindObjectOfType<ObjectPool> ()?.PreloadedPrefabs;
+            for (int n = 0; n < pool?.Length; n++) {
+                SetupSpawnManager (pool[n].Prefab);
+            }
+        }
+        private void SetupSpawnManager (GameObject go, bool pool = true) {
+            if (ComponentUtility.HasComponent<NetworkObject> (go)) {
+                m_SpawnableGameObjects.Add (go);
+                NetworkManager.Singleton.PrefabHandler.AddHandler (go,
+                    new NetworkedSpawnManager (go, transform, pool));
             }
         }
         /// <summary>
@@ -37,30 +41,17 @@ namespace GreedyVox.Networked {
         /// <param name="instanceObject">The object that was instantiated from the original object.</param>
         /// <param name="sceneObject">Is the object owned by the scene? If fales it will be owned by the character.</param>
         protected override void NetworkSpawnInternal (GameObject original, GameObject instanceObject, bool sceneObject) {
-            if (!m_SpawnableGameObjectIDMap.TryGetValue (original, out var index)) {
+            if (!m_SpawnableGameObjects.Contains (original)) {
                 Debug.LogError ($"Error: Unable to spawn {original.name} on the network. Ensure the object has been added to the NetworkObjectPool.");
             } else {
                 if (!m_SpawnedGameObjects.Contains (instanceObject)) {
                     m_SpawnedGameObjects.Add (instanceObject);
                 }
-                if (!m_ActiveGameObjects.ContainsKey (instanceObject)) {
-                    m_ActiveGameObjects.Add (instanceObject, instanceObject.GetCachedComponent<ISpawnDataObject> ());
+                if (!m_ActiveGameObjects.Contains (instanceObject)) {
+                    m_ActiveGameObjects.Add (instanceObject);
                 }
-
-                if (NetworkManager.Singleton.IsServer &&
-                    (m_NetworkObject = instanceObject.GetCachedComponent<NetworkObject> ()) != null) {
-                    // The pooled object can optionally provide initialization spawn data.
-                    var data = instanceObject.GetCachedComponent<ISpawnDataObject> ();
-                    if (data == null) {
-                        m_NetworkObject.Spawn ();
-                    } else {
-                        // TODO: cause the object maybe already spawned, a pooled object will need to be handle                    
-                        using (var stream = PooledNetworkBuffer.Get ())
-                        using (var writer = PooledNetworkWriter.Get (stream)) {
-                            data.SpawnData (writer);
-                            m_NetworkObject.Spawn (stream);
-                        }
-                    }
+                if (NetworkManager.Singleton.IsServer) {
+                    instanceObject.GetCachedComponent<NetworkObject> ()?.Spawn ();
                 }
             }
         }
@@ -81,13 +72,14 @@ namespace GreedyVox.Networked {
             if ((m_NetworkObject = obj.GetComponent<NetworkObject> ()) != null && m_NetworkObject.IsSpawned) {
                 if (NetworkManager.Singleton.IsServer) {
                     m_NetworkObject.Despawn ();
-                } else {
-                    m_NetworkedMessenger?.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
+                } else if (NetworkManager.Singleton.IsClient) {
+                    NetworkedMessenger.Instance.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
                 }
-            }
-            if (m_NetworkObject == null || !m_NetworkObject.IsSpawned) {
-                m_ActiveGameObjects.Remove (obj);
+            } else {
                 ObjectPool.Destroy (obj);
+            }
+            if (m_NetworkObject == null) {
+                m_ActiveGameObjects.Remove (obj);
             }
         }
         /// <summary>
@@ -98,8 +90,7 @@ namespace GreedyVox.Networked {
         /// <param name="rotation">The rotation for the instance.</param>
         /// <returns>A disabled instance to use by Networking or null if the prefabId is unknown.</returns>
         public GameObject Instantiate (string prefabId, Vector3 position, Quaternion rotation) {
-            GameObject value;
-            if (!m_ResourceCache.TryGetValue (prefabId, out value)) {
+            if (!m_ResourceCache.TryGetValue (prefabId, out var value)) {
                 value = (GameObject) Resources.Load (prefabId, typeof (GameObject));
                 m_ResourceCache.Add (prefabId, value);
             }

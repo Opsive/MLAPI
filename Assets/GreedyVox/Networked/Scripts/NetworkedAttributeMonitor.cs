@@ -1,7 +1,6 @@
-﻿using MLAPI;
-using MLAPI.Messaging;
-using Opsive.Shared.Game;
+﻿using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -23,14 +22,14 @@ namespace GreedyVox.Networked {
         /// <summary>
         /// A player has entered the room. Ensure the joining player is in sync with the current game state.
         /// </summary>
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
             var attributes = m_AttributeManager.Attributes;
             if (attributes != null) {
                 for (int i = 0; i < attributes.Length; ++i) {
                     if (IsServer) {
                         UpdateAttributeClientRpc (attributes[i].Name, attributes[i].Value, attributes[i].MinValue, attributes[i].MaxValue,
                             attributes[i].AutoUpdateAmount, attributes[i].AutoUpdateInterval, attributes[i].AutoUpdateStartDelay, (int) attributes[i].AutoUpdateValueType);
-                    } else {
+                    } else if (IsOwner) {
                         UpdateAttributeServerRpc (attributes[i].Name, attributes[i].Value, attributes[i].MinValue, attributes[i].MaxValue,
                             attributes[i].AutoUpdateAmount, attributes[i].AutoUpdateInterval, attributes[i].AutoUpdateStartDelay, (int) attributes[i].AutoUpdateValueType);
                     }

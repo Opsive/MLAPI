@@ -1,5 +1,5 @@
-﻿using MLAPI;
-using Opsive.UltimateCharacterController.Networking;
+﻿using Opsive.UltimateCharacterController.Networking;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>

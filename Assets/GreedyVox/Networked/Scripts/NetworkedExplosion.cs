@@ -1,6 +1,6 @@
 using System.Collections.Generic;
+using Opsive.Shared.Audio;
 using Opsive.Shared.Game;
-using Opsive.UltimateCharacterController.Audio;
 using Opsive.UltimateCharacterController.Events;
 using Opsive.UltimateCharacterController.Game;
 using Opsive.UltimateCharacterController.Networking.Game;
@@ -62,7 +62,7 @@ namespace GreedyVox.Networked {
             m_GameObject = gameObject;
             m_Transform = transform;
             m_CollidersHit = new Collider[m_MaxCollisionCount];
-            AudioManager.Register (m_GameObject);
+            // AudioManager.Register (m_GameObject);
         }
         /// <summary>
         /// Explode if requested when the component is enabled.

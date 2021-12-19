@@ -6,10 +6,6 @@ public class NetworkedSettingsTest : NetworkedSettingsAbstract {
     [SerializeField] private AudioClip m_AudioConnect = null;
     [SerializeField] private AudioClip m_AudioDisconnect = null;
     [Range (0, 1)][SerializeField] private float m_Volume = 0.0f;
-    [Tooltip ("Allows you to change the channel position updates are sent on. Its prefered to be UnreliableSequenced for fast paced")]
-    [SerializeField] private string m_NetworkChannel = "MLAPI_DEFAULT_MESSAGE";
-    [SerializeField] private string m_NetworkBroadcast = "MLAPI_DEFAULT_MESSAGE";
-    [Tooltip ("Sync client no more than amount times a second")]
     [SerializeField][Range (0, 120)] private int m_SyncPerSecondClient = 20;
     [Tooltip ("Sync server no more than amount times a second")]
     [SerializeField][Range (0, 120)] private int m_SyncPerSecondServer = 20;
@@ -17,8 +13,8 @@ public class NetworkedSettingsTest : NetworkedSettingsAbstract {
     public override float SyncRateServer => 1.0f / m_SyncPerSecondServer;
     protected override void OnEnable () {
         base.OnEnable ();
-        Channel = string.IsNullOrEmpty (m_NetworkChannel) ? "MLAPI_DEFAULT_MESSAGE" : m_NetworkChannel;
-        Broadcast = string.IsNullOrEmpty (m_NetworkBroadcast) ? "MLAPI_DEFAULT_MESSAGE" : m_NetworkBroadcast;
+        // Channel = string.IsNullOrEmpty (m_NetworkChannel) ? "MLAPI_DEFAULT_MESSAGE" : m_NetworkChannel;
+        // Broadcast = string.IsNullOrEmpty (m_NetworkBroadcast) ? "MLAPI_DEFAULT_MESSAGE" : m_NetworkBroadcast;
 
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER 
         Debug.Log ("<color=white><b>ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER ENABLED</b></color>");

@@ -1,11 +1,9 @@
 using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Messaging;
-using MLAPI.Serialization.Pooled;
-using MLAPI.Transports;
 using Opsive.Shared.Events;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Character;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -28,14 +26,16 @@ namespace GreedyVox.Networked.Ai {
         [Tooltip ("A multiplier to apply to the networked values for remote players.")]
         [SerializeField] protected float m_RemoteInterpolationMultiplayer = 1.2f;
         private byte m_Flag;
-
+        private string m_MsgName;
+        private int m_MaxBufferSize;
         private Transform m_Transform;
-        private string m_MsgLookSource;
         private GameObject m_GameObject;
         private ILookSource m_LookSource;
         private bool m_InitialSync = true;
         private NetworkedSyncRate m_NetworkSync;
         private NetworkedManager m_NetworkManager;
+        private FastBufferWriter m_FastBufferWriter;
+        private CustomMessagingManager m_CustomMessagingManager;
         private UltimateCharacterLocomotion m_CharacterLocomotion;
         private float m_NetworkLookDirectionDistance = 1;
         private float m_NetworkTargetLookDirectionDistance = 1;
@@ -50,8 +50,9 @@ namespace GreedyVox.Networked.Ai {
         /// Initialize the default values.
         /// </summary>
         private void Awake () {
-            m_GameObject = gameObject;
             m_Transform = transform;
+            m_GameObject = gameObject;
+            m_MaxBufferSize = MaxBufferSize ();
             m_NetworkManager = NetworkedManager.Instance;
             m_NetworkSync = gameObject.GetCachedComponent<NetworkedSyncRate> ();
             m_NetworkLookPosition = m_NetworkTargetLookPosition = m_Transform.position;
@@ -70,41 +71,49 @@ namespace GreedyVox.Networked.Ai {
                 EventHandler.ExecuteEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", this);
             }
         }
-        private void OnDisable () {
+        /// <summary>
+        /// The character has been destroyed.
+        /// </summary>
+        public override void OnDestroy () {
+            base.OnDestroy ();
+            EventHandler.UnregisterEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", OnAttachLookSource);
+        }
+        /// <summary>
+        /// The object has been despawned.
+        /// </summary>
+        public override void OnNetworkDespawn () {
+            m_CustomMessagingManager?.UnregisterNamedMessageHandler (m_MsgName);
             m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
         }
         /// <summary>
-        /// The character has been destroyed.
-        /// </summary>
-        private void OnDestroy () {
-            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgLookSource);
-            EventHandler.UnregisterEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", OnAttachLookSource);
-        }
-        /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
         /// </summary>
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
             m_NetworkSync.NetworkSyncEvent += OnNetworkSyncEvent;
-            m_MsgLookSource = $"{NetworkObjectId}MsgClientLookSourceAi{OwnerClientId}";
+            m_MsgName = $"{NetworkObjectId}MsgClientLookSourceAi{OwnerClientId}";
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
 
             if (!IsServer) {
                 m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent;
-                CustomMessagingManager.RegisterNamedMessageHandler (m_MsgLookSource, (sender, stream) => {
-                    using (var reader = PooledNetworkReader.Get (stream)) {
-                        SerializeView (reader);
-                    }
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
+                    SerializeView (ref reader);
                 });
             }
+        }
+        /// <summary>
+        /// Returns the maximus size for the fast buffer writer
+        /// </summary>               
+        private int MaxBufferSize () {
+            return sizeof (byte) + sizeof (float) * 2 + sizeof (float) * 3 * 3;
         }
         /// <summary>
         /// Network broadcast event called from the NetworkedSyncRate component
         /// </summary>
         private void OnNetworkSyncEvent (List<ulong> clients) {
-            using (var stream = PooledNetworkBuffer.Get ())
-            using (var writer = PooledNetworkWriter.Get (stream)) {
-                if (SerializeView (writer)) {
-                    CustomMessagingManager.SendNamedMessage (m_MsgLookSource, clients, stream, NetworkChannel.ChannelUnused);
+            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                if (SerializeView ()) {
+                    m_CustomMessagingManager?.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.UnreliableSequenced);
                 }
             }
         }
@@ -123,16 +132,16 @@ namespace GreedyVox.Networked.Ai {
         /// Called several times per second, so that your script can read synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being read from.</param>
-        public void SerializeView (PooledNetworkReader stream) {
-            m_Flag = (byte) stream.ReadByte ();
-            if (m_Flag != (byte) TransformDirtyFlags.LookDirectionDistance)
-                m_NetworkTargetLookDirectionDistance = stream.ReadSinglePacked ();
-            if (m_Flag != (byte) TransformDirtyFlags.Pitch)
-                m_NetworkTargetPitch = stream.ReadSinglePacked ();
-            if (m_Flag != (byte) TransformDirtyFlags.LookPosition)
-                m_NetworkTargetLookPosition = stream.ReadVector3Packed ();
-            if (m_Flag != (byte) TransformDirtyFlags.LookDirection)
-                m_NetworkTargetLookDirection = stream.ReadVector3Packed ();
+        public void SerializeView (ref FastBufferReader reader) {
+            ByteUnpacker.ReadValuePacked (reader, out m_Flag);
+            if ((m_Flag & (byte) TransformDirtyFlags.LookDirectionDistance) != 0)
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookDirectionDistance);
+            if ((m_Flag & (byte) TransformDirtyFlags.Pitch) != 0)
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetPitch);
+            if ((m_Flag & (byte) TransformDirtyFlags.LookPosition) != 0)
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookPosition);
+            if ((m_Flag & (byte) TransformDirtyFlags.LookDirection) != 0)
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkTargetLookDirection);
             if (m_InitialSync) {
                 m_NetworkLookDirectionDistance = m_NetworkTargetLookDirectionDistance;
                 m_NetworkPitch = m_NetworkTargetPitch;
@@ -145,7 +154,7 @@ namespace GreedyVox.Networked.Ai {
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written to.</param>
-        public bool SerializeView (PooledNetworkWriter stream) {
+        public bool SerializeView () {
             // Determine the objects that have changed.
             m_Flag = 0;
             if (m_LookSource != null) {
@@ -157,7 +166,7 @@ namespace GreedyVox.Networked.Ai {
                     m_Flag |= (byte) TransformDirtyFlags.Pitch;
                     m_NetworkPitch = m_LookSource.Pitch;
                 }
-                var lookPosition = m_LookSource.LookPosition ();
+                var lookPosition = m_LookSource.LookPosition (true);
                 if (m_NetworkLookPosition != lookPosition) {
                     m_Flag |= (byte) TransformDirtyFlags.LookPosition;
                     m_NetworkLookPosition = lookPosition;
@@ -168,15 +177,15 @@ namespace GreedyVox.Networked.Ai {
                     m_NetworkLookDirection = lookDirection;
                 }
                 // Send the changes.
-                stream.WriteByte (m_Flag);
-                if (m_Flag != (byte) TransformDirtyFlags.LookDirectionDistance)
-                    stream.WriteSinglePacked (m_NetworkLookDirectionDistance);
-                if (m_Flag != (byte) TransformDirtyFlags.Pitch)
-                    stream.WriteSinglePacked (m_NetworkPitch);
-                if (m_Flag != (byte) TransformDirtyFlags.LookPosition)
-                    stream.WriteVector3Packed (m_NetworkLookPosition);
-                if (m_Flag != (byte) TransformDirtyFlags.LookDirection)
-                    stream.WriteVector3Packed (m_NetworkLookDirection);
+                BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
+                if ((m_Flag & (byte) TransformDirtyFlags.LookDirectionDistance) != 0)
+                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirectionDistance);
+                if ((m_Flag & (byte) TransformDirtyFlags.Pitch) != 0)
+                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkPitch);
+                if ((m_Flag & (byte) TransformDirtyFlags.LookPosition) != 0)
+                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookPosition);
+                if ((m_Flag & (byte) TransformDirtyFlags.LookDirection) != 0)
+                    BytePacker.WriteValuePacked (m_FastBufferWriter, m_NetworkLookDirection);
             }
             return m_Flag > 0;
         }
@@ -190,8 +199,9 @@ namespace GreedyVox.Networked.Ai {
         /// <summary>
         /// Returns the position of the look source.
         /// </summary>
+        /// <param name="characterLookPosition">Is the character look position being retrieved?</param>
         /// <returns>The position of the look source.</returns>
-        public Vector3 LookPosition () {
+        public Vector3 LookPosition (bool characterLookPosition) {
             return m_NetworkLookPosition;
         }
         /// <summary>

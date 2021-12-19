@@ -2,8 +2,6 @@
 using UnityEngine;
 
 public abstract class NetworkedSettingsAbstract : ScriptableObject {
-    public string Channel = null;
-    public string Broadcast = null;
     public bool IsActiveAndEnabled = false;
     public abstract void PlayConnect (AudioSource source);
     public abstract void PlayDisconnect (AudioSource source);

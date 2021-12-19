@@ -1,7 +1,7 @@
-using MLAPI;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Inventory;
 using Opsive.UltimateCharacterController.Items;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace GreedyVox.Networked {
@@ -13,7 +13,7 @@ namespace GreedyVox.Networked {
     public class NetworkedRuntimePickups : NetworkBehaviour {
         [Tooltip ("An array of items that can be picked up at runtime. Any runtime pickup item must be specified within this array.")]
         [SerializeField] protected Item[] m_RuntimeItems;
-        public override void NetworkStart () {
+        public override void OnNetworkSpawn () {
             var inventory = gameObject.GetCachedComponent<InventoryBase> ();
             if (inventory != null) {
                 var itemPlacement = gameObject.GetComponentInChildren<ItemPlacement> (true);

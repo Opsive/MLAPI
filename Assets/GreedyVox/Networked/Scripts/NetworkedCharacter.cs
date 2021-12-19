@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using MLAPI;
-using MLAPI.Messaging;
-using MLAPI.Spawning;
+﻿using GreedyVox.Networked.Utilities;
 using Opsive.Shared.Events;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Camera;
@@ -14,6 +11,7 @@ using Opsive.UltimateCharacterController.Items.Actions;
 using Opsive.UltimateCharacterController.Items.Actions.PerspectiveProperties;
 using Opsive.UltimateCharacterController.Networking.Character;
 using Opsive.UltimateCharacterController.Traits;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -23,8 +21,6 @@ namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedCharacter : NetworkBehaviour, INetworkCharacter {
         private GameObject m_GameObject;
-        // private NetworkedManager m_NetworkManager;
-        private Dictionary<ulong, NetworkObject> m_NetworkObjects;
         private UltimateCharacterLocomotion m_CharacterLocomotion;
         private InventoryBase m_Inventory;
         private bool m_ItemsPickedUp;
@@ -33,7 +29,6 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GameObject = gameObject;
-            m_NetworkObjects = NetworkSpawnManager.SpawnedObjects;
             m_Inventory = m_GameObject.GetCachedComponent<InventoryBase> ();
             m_CharacterLocomotion = m_GameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
         }
@@ -51,29 +46,53 @@ namespace GreedyVox.Networked {
         /// <summary>
         /// The character has been destroyed.
         /// </summary>
-        private void OnDestroy () {
-            EventHandler.ExecuteEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", null);
+        public override void OnDestroy () {
+            base.OnDestroy ();
             EventHandler.UnregisterEvent<Ability, bool> (m_GameObject, "OnCharacterAbilityActive", AbilityActive);
             EventHandler.UnregisterEvent<ItemAbility, bool> (m_GameObject, "OnCharacterItemAbilityActive", ItemAbilityActive);
-            if (m_CharacterLocomotion.LookSource != null && m_CharacterLocomotion.LookSource.GameObject != null) {
-                // The local character has left the room. The character no longer has a look source.
+        }
+        /// <summary>
+        /// The object has been despawned.
+        /// </summary>
+        public override void OnNetworkDespawn () {
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerDisconnected", OnPlayerDisconnected);
+        }
+        /// <summary>
+        /// Gets called when message handlers are ready to be registered and the networking is setup.
+        /// </summary>
+        public override void OnNetworkSpawn () {
+            if (IsServer) {
+                EventHandler.RegisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
+                EventHandler.RegisterEvent<ulong> ("OnPlayerDisconnected", OnPlayerDisconnected);
+            }
+        }
+        /// <summary>
+        /// A player has disconnected. Perform any cleanup.
+        /// </summary>
+        /// <param name="player">The Player networking ID that disconnected.</param>
+        private void OnPlayerDisconnected (ulong ID) {
+            if (OwnerClientId == ID && m_CharacterLocomotion.LookSource != null &&
+                m_CharacterLocomotion.LookSource.GameObject != null) {
+                // The local character has disconnected. The character no longer has a look source.
                 var cameraController = m_CharacterLocomotion.LookSource.GameObject.GetComponent<CameraController> ();
                 if (cameraController != null) {
                     cameraController.Character = null;
                 }
+                EventHandler.ExecuteEvent<ILookSource> (m_GameObject, "OnCharacterAttachLookSource", null);
             }
         }
-        public override void NetworkStart () {
+        /// <summary>
+        /// A player has joined. Ensure the joining player is in sync with the current game state.
+        /// </summary>
+        /// <param name="id">The Player networking ID that connected.</param>
+        private void OnPlayerConnected (ulong ID) {
             // Notify the joining player of the ItemIdentifiers that the player has within their inventory.
             if (m_Inventory != null) {
                 var items = m_Inventory.GetAllItems ();
                 for (int i = 0; i < items.Count; i++) {
                     var item = items[i];
-                    if (IsServer) {
-                        PickupItemIdentifierClientRpc (item.ItemIdentifier.ID, m_Inventory.GetItemIdentifierAmount (item.ItemIdentifier));
-                    } else {
-                        PickupItemIdentifierServerRpc (item.ItemIdentifier.ID, m_Inventory.GetItemIdentifierAmount (item.ItemIdentifier));
-                    }
+                    PickupItemIdentifierClientRpc (item.ItemIdentifier.ID, m_Inventory.GetItemIdentifierAmount (item.ItemIdentifier));
                     // Usable Items have a separate ItemIdentifiers amount.
                     if (item.DropPrefab != null) {
                         var itemActions = item.ItemActions;
@@ -82,13 +101,8 @@ namespace GreedyVox.Networked {
                             if (usableItem != null) {
                                 var consumableItemIdentifierAmount = usableItem.GetConsumableItemIdentifierAmount ();
                                 if (consumableItemIdentifierAmount > 0 || consumableItemIdentifierAmount == -1) { // -1 is used by the grenade to indicate that there is only one item.
-                                    if (IsServer) {
-                                        PickupUsableItemActionClientRpc (item.ItemIdentifier.ID, item.SlotID, itemActions[j].ID,
-                                            m_Inventory.GetItemIdentifierAmount (usableItem.GetConsumableItemIdentifier ()), consumableItemIdentifierAmount);
-                                    } else {
-                                        PickupUsableItemActionServerRpc (item.ItemIdentifier.ID, item.SlotID, itemActions[j].ID,
-                                            m_Inventory.GetItemIdentifierAmount (usableItem.GetConsumableItemIdentifier ()), consumableItemIdentifierAmount);
-                                    }
+                                    PickupUsableItemActionClientRpc (item.ItemIdentifier.ID, item.SlotID, itemActions[j].ID,
+                                        m_Inventory.GetItemIdentifierAmount (usableItem.GetConsumableItemIdentifier ()), consumableItemIdentifierAmount);
                                 }
                             }
                         }
@@ -98,32 +112,25 @@ namespace GreedyVox.Networked {
                 for (int i = 0; i < m_Inventory.SlotCount; i++) {
                     var item = m_Inventory.GetActiveItem (i);
                     if (item != null) {
-                        if (IsServer) {
-                            EquipUnequipItemClientRpc (item.ItemIdentifier.ID, i, true);
-                        } else {
-                            EquipUnequipItemServerRpc (item.ItemIdentifier.ID, i, true);
-                        }
+                        EquipUnequipItemClientRpc (item.ItemIdentifier.ID, i, true);
                     }
                 }
             }
-
             // ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER will be defined, but it is required here to allow the add-on to be compiled for the first time.
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
             // The remote character should have the same abilities active.
             for (int i = 0; i < m_CharacterLocomotion.ActiveAbilityCount; i++) {
                 var activeAbility = m_CharacterLocomotion.ActiveAbilities[i];
-                if (IsServer) {
-                    StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Create (activeAbility.GetNetworkStartData ()));
-                } else {
-                    StartAbilityServerRpc (activeAbility.Index, SerializerObjectArray.Create (activeAbility.GetNetworkStartData ()));
+                var dat = activeAbility?.GetNetworkStartData ();
+                if (dat != null) {
+                    StartAbilityClientRpc (activeAbility.Index, SerializerObjectArray.Serialize (dat));
                 }
             }
             for (int i = 0; i < m_CharacterLocomotion.ActiveItemAbilityCount; i++) {
                 var activeItemAbility = m_CharacterLocomotion.ActiveItemAbilities[i];
-                if (IsServer) {
-                    // StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Create (activeItemAbility.GetNetworkStartData ()));
-                } else {
-                    StartItemAbilityServerRpc (activeItemAbility.Index, SerializerObjectArray.Create (activeItemAbility.GetNetworkStartData ()));
+                var abilities = activeItemAbility.GetNetworkStartData ();
+                if (abilities != null) {
+                    StartItemAbilityClientRpc (activeItemAbility.Index, SerializerObjectArray.Serialize (abilities));
                 }
             }
 #endif
@@ -211,8 +218,8 @@ namespace GreedyVox.Networked {
         private void StartAbilityRpc (int abilityIndex, SerializableObjectArray startData) {
             var ability = m_CharacterLocomotion.Abilities[abilityIndex];
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
-            if (startData.Value != null) {
-                ability.SetNetworkStartData (startData.Value);
+            if (startData != null) {
+                ability.SetNetworkStartData (DeserializerObjectArray.Deserialize (startData));
             }
 #endif
             m_CharacterLocomotion.TryStartAbility (ability, true, true);
@@ -236,8 +243,8 @@ namespace GreedyVox.Networked {
         private void StartItemAbilityRpc (int itemAbilityIndex, SerializableObjectArray startData) {
             var itemAbility = m_CharacterLocomotion.ItemAbilities[itemAbilityIndex];
 #if ULTIMATE_CHARACTER_CONTROLLER_MULTIPLAYER
-            if (startData.Value != null) {
-                itemAbility.SetNetworkStartData (startData.Value);
+            if (startData != null) {
+                itemAbility.SetNetworkStartData (DeserializerObjectArray.Deserialize (startData));
             }
 #endif
             m_CharacterLocomotion.TryStartAbility (itemAbility, true, true);
@@ -427,7 +434,7 @@ namespace GreedyVox.Networked {
 
         [ClientRpc]
         private void ItemIdentifierPickupClientRpc (uint itemIdentifierID, int amount, int slotID, bool immediatePickup, bool forceEquip) {
-            ItemIdentifierPickupRpc (itemIdentifierID, amount, slotID, immediatePickup, forceEquip);
+            if (!IsOwner) { ItemIdentifierPickupRpc (itemIdentifierID, amount, slotID, immediatePickup, forceEquip); }
         }
         /// <summary>
         /// Removes all of the items from the inventory.
@@ -725,7 +732,7 @@ namespace GreedyVox.Networked {
                 // Retrieve the hit character before getting the hit GameObject so RetrieveGameObject will know the parent GameObject (if it exists).
                 UltimateCharacterLocomotion characterLocomotion = null;
                 if (hitCharacterLocomotionViewID != -1) {
-                    if (NetworkSpawnManager.SpawnedObjects.TryGetValue ((ulong) hitCharacterLocomotionViewID, out var obj)) {
+                    if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue ((ulong) hitCharacterLocomotionViewID, out var obj)) {
                         characterLocomotion = obj.gameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
                     }
                 }
@@ -1094,7 +1101,7 @@ namespace GreedyVox.Networked {
         /// <param name="force">The amount of force to apply.</param>
         /// <param name="point">The point at which to apply the push force.</param>
         private void PushRigidbodyRpc (ulong rigidbodyNetworkObjectId, Vector3 force, Vector3 point) {
-            if (NetworkSpawnManager.SpawnedObjects.TryGetValue ((ulong) rigidbodyNetworkObjectId, out var obj)) {
+            if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue ((ulong) rigidbodyNetworkObjectId, out var obj)) {
                 var targetRigidbody = obj.gameObject.GetComponent<Rigidbody> ();
                 if (targetRigidbody != null) {
                     targetRigidbody.AddForceAtPosition (force, point, ForceMode.VelocityChange);

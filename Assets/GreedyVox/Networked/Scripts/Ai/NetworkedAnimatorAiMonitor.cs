@@ -1,10 +1,9 @@
 using System.Collections.Generic;
-using MLAPI.Messaging;
-using MLAPI.Serialization.Pooled;
-using MLAPI.Transports;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Character;
 using Opsive.UltimateCharacterController.Networking;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -31,24 +30,28 @@ namespace GreedyVox.Networked.Ai {
             AbilityIntData = 1024, // The Ability Int Data parameter has changed.
             AbilityFloatData = 2048 // The Ability Float Data parameter has changed.
         }
-        private short m_DirtyFlag;
+        private short m_Flag;
+        private int m_MaxBufferSize;
         private byte m_ItemDirtySlot;
-        private string m_MsgAnimator;
+        private string m_MsgName;
         private INetworkInfo m_NetworkInfo;
         private NetworkedEvent m_NetworkEvent;
         private NetworkedSyncRate m_NetworkSync;
         private NetworkedManager m_NetworkManager;
+        private FastBufferWriter m_FastBufferWriter;
         private int m_SnappedAbilityIndex = -1;
+        private CustomMessagingManager m_CustomMessagingManager;
         private float m_NetworkYaw, m_NetworkPitch, m_NetworkSpeed;
         private float m_NetworkHorizontalMovement, m_NetworkForwardMovement, m_NetworkAbilityFloatData;
         protected override void Awake () {
             base.Awake ();
+            m_MaxBufferSize = MaxBufferSize ();
             m_NetworkManager = NetworkedManager.Instance;
             m_NetworkInfo = GetComponent<INetworkInfo> ();
             m_NetworkEvent = GetComponent<NetworkedEvent> ();
             m_NetworkSync = gameObject.GetCachedComponent<NetworkedSyncRate> ();
 
-            m_NetworkEvent.NetworkStartEvent += OnNetworkStartEvent;
+            m_NetworkEvent.NetworkSpawnEvent += OnNetworkSpawnEvent;
         }
         /// <summary>
         /// Verify the update mode of the animator.
@@ -63,40 +66,43 @@ namespace GreedyVox.Networked.Ai {
                 }
             }
         }
-        private void OnDisable () {
+        /// <summary>
+        /// Gets called when message handlers are ready to be unregistered.
+        /// </summary>
+        private void OnNetworkDespawnEvent () {
             m_NetworkSync.NetworkSyncEvent -= OnNetworkSyncEvent;
             m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent -= OnNetworkSyncUpdateEvent;
-        }
-        /// <summary>
-        /// The character has been destroyed.
-        /// </summary>
-        private void OnDestroy () {
-            CustomMessagingManager.UnregisterNamedMessageHandler (m_MsgAnimator);
+            m_CustomMessagingManager?.UnregisterNamedMessageHandler (m_MsgName);
         }
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup. Provides a Payload if it was provided
         /// </summary>
-        private void OnNetworkStartEvent () {
+        private void OnNetworkSpawnEvent () {
             m_NetworkSync.NetworkSyncEvent += OnNetworkSyncEvent;
-            m_MsgAnimator = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{ m_NetworkEvent.OwnerClientId}";
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
+            m_MsgName = $"{m_NetworkEvent.NetworkObjectId}MsgClientAnima{ m_NetworkEvent.OwnerClientId}";
 
             if (!m_NetworkInfo.IsServer ()) {
                 m_NetworkManager.NetworkSettings.NetworkSyncUpdateEvent += OnNetworkSyncUpdateEvent;
-                CustomMessagingManager.RegisterNamedMessageHandler (m_MsgAnimator, (sender, stream) => {
-                    using (var reader = PooledNetworkReader.Get (stream)) {
-                        SynchronizeParameters (reader);
-                    }
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (sender, reader) => {
+                    SynchronizeParameters (ref reader);
                 });
             }
+        }
+        /// <summary>
+        /// Returns the maximus size for the fast buffer writer
+        /// </summary>
+        private int MaxBufferSize () {
+            return sizeof (bool) * 2 + sizeof (short) * 2 + sizeof (int) * 4 +
+                sizeof (float) * 6 + sizeof (int) * ParameterSlotCount * 3;
         }
         /// <summary>
         /// Network broadcast event called from the NetworkedSyncRate component
         /// </summary>
         private void OnNetworkSyncEvent (List<ulong> clients) {
-            using (var stream = PooledNetworkBuffer.Get ())
-            using (var writer = PooledNetworkWriter.Get (stream)) {
-                if (SynchronizeParameters (writer)) {
-                    CustomMessagingManager.SendNamedMessage (m_MsgAnimator, clients, stream, NetworkChannel.ChannelUnused);
+            using (m_FastBufferWriter = new FastBufferWriter (FastBufferWriter.GetWriteSize (m_Flag), Allocator.Temp, m_MaxBufferSize)) {
+                if (SynchronizeParameters ()) {
+                    m_CustomMessagingManager?.SendNamedMessage (m_MsgName, clients, m_FastBufferWriter, NetworkDelivery.ReliableSequenced);
                 }
             }
         }
@@ -122,83 +128,106 @@ namespace GreedyVox.Networked.Ai {
         /// <summary>
         /// Sets the initial item parameter values.
         /// </summary>
-        private void InitializeItemParameters (PooledNetworkWriter stream, int idx) {
-            stream.WriteInt32Packed (idx);
-            stream.WriteInt32Packed (ItemSlotID[idx]);
-            stream.WriteInt32Packed (ItemSlotStateIndex[idx]);
-            stream.WriteInt32Packed (ItemSlotSubstateIndex[idx]);
+        private void InitializeItemParameters (int idx) {
+            BytePacker.WriteValuePacked (m_FastBufferWriter, idx);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, ItemSlotID[idx]);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, ItemSlotStateIndex[idx]);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, ItemSlotSubstateIndex[idx]);
         }
         /// <summary>
         /// Gets the initial item parameter values.
         /// </summary>
-        private void InitializeItemParameters (PooledNetworkReader stream) {
-            var idx = stream.ReadInt32Packed ();
-            SetItemIDParameter (idx, stream.ReadInt32Packed ());
-            SetItemStateIndexParameter (idx, stream.ReadInt32Packed ());
-            SetItemSubstateIndexParameter (idx, stream.ReadInt32Packed ());
+        private void InitializeItemParameters (ref FastBufferReader reader) {
+            ByteUnpacker.ReadValuePacked (reader, out int idx);
+            ByteUnpacker.ReadValuePacked (reader, out int id);
+            ByteUnpacker.ReadValuePacked (reader, out int state);
+            ByteUnpacker.ReadValuePacked (reader, out int index);
+            SetItemIDParameter (idx, id);
+            SetItemStateIndexParameter (idx, state);
+            SetItemSubstateIndexParameter (idx, index);
             SnapAnimator ();
         }
         /// <summary>
         /// Sets the initial parameter values.
         /// </summary>
-        private void InitializeParameters (PooledNetworkWriter stream) {
-            stream.WriteSinglePacked (HorizontalMovement);
-            stream.WriteSinglePacked (ForwardMovement);
-            stream.WriteSinglePacked (Pitch);
-            stream.WriteSinglePacked (Yaw);
-            stream.WriteSinglePacked (Speed);
-            stream.WriteInt32Packed (Height);
-            stream.WriteBool (Moving);
-            stream.WriteBool (Aiming);
-            stream.WriteInt32Packed (MovementSetID);
-            stream.WriteInt32Packed (AbilityIndex);
-            stream.WriteInt32Packed (AbilityIntData);
-            stream.WriteSinglePacked (AbilityFloatData);
+        private void InitializeParameters () {
+            BytePacker.WriteValuePacked (m_FastBufferWriter, HorizontalMovement);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, ForwardMovement);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, Pitch);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, Yaw);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, Speed);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, Height);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, Moving);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, Aiming);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, MovementSetID);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIndex);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIntData);
+            BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityFloatData);
         }
         /// <summary>
         /// Gets the initial parameter values.
         /// </summary>
-        private void InitializeParameters (PooledNetworkReader stream) {
-            SetHorizontalMovementParameter (stream.ReadSinglePacked (), 1);
-            SetForwardMovementParameter (stream.ReadSinglePacked (), 1);
-            SetPitchParameter (stream.ReadSinglePacked (), 1);
-            SetYawParameter (stream.ReadSinglePacked (), 1);
-            SetSpeedParameter (stream.ReadSinglePacked (), 1);
-            SetHeightParameter (stream.ReadInt32Packed ());
-            SetMovingParameter (stream.ReadBool ());
-            SetAimingParameter (stream.ReadBool ());
-            SetMovementSetIDParameter (stream.ReadInt32Packed ());
-            SetAbilityIndexParameter (stream.ReadInt32Packed ());
-            SetAbilityIntDataParameter (stream.ReadInt32Packed ());
-            SetAbilityFloatDataParameter (stream.ReadSinglePacked (), 1);
+        private void InitializeParameters (ref FastBufferReader reader) {
+            ByteUnpacker.ReadValuePacked (reader, out float horizontal);
+            ByteUnpacker.ReadValuePacked (reader, out float forward);
+            ByteUnpacker.ReadValuePacked (reader, out float pitch);
+            ByteUnpacker.ReadValuePacked (reader, out float yaw);
+            ByteUnpacker.ReadValuePacked (reader, out float speed);
+            ByteUnpacker.ReadValuePacked (reader, out int height);
+            ByteUnpacker.ReadValuePacked (reader, out bool moving);
+            ByteUnpacker.ReadValuePacked (reader, out bool aiming);
+            ByteUnpacker.ReadValuePacked (reader, out int move);
+            ByteUnpacker.ReadValuePacked (reader, out int index);
+            ByteUnpacker.ReadValuePacked (reader, out int dati);
+            ByteUnpacker.ReadValuePacked (reader, out float datf);
+            SetHorizontalMovementParameter (horizontal, 1);
+            SetForwardMovementParameter (forward, 1);
+            SetPitchParameter (pitch, 1);
+            SetYawParameter (yaw, 1);
+            SetSpeedParameter (speed, 1);
+            SetHeightParameter (height);
+            SetMovingParameter (moving);
+            SetAimingParameter (aiming);
+            SetMovementSetIDParameter (move);
+            SetAbilityIndexParameter (index);
+            SetAbilityIntDataParameter (dati);
+            SetAbilityFloatDataParameter (datf, 1);
             SnapAnimator ();
         }
         /// <summary>
         /// Called several times per second, so that your script can read synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being read from.</param>
-        private void SynchronizeParameters (PooledNetworkReader stream) {
-            var flag = stream.ReadInt16Packed ();
+        private void SynchronizeParameters (ref FastBufferReader reader) {
+            ByteUnpacker.ReadValuePacked (reader, out short flag);
             if ((flag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
-                m_NetworkHorizontalMovement = stream.ReadSinglePacked ();
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkHorizontalMovement);
             if ((flag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
-                m_NetworkForwardMovement = stream.ReadSinglePacked ();
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkForwardMovement);
             if ((flag & (short) ParameterDirtyFlags.Pitch) != 0)
-                m_NetworkPitch = stream.ReadSinglePacked ();
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkPitch);
             if ((flag & (short) ParameterDirtyFlags.Yaw) != 0)
-                m_NetworkYaw = stream.ReadSinglePacked ();
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkYaw);
             if ((flag & (short) ParameterDirtyFlags.Speed) != 0)
-                m_NetworkSpeed = stream.ReadSinglePacked ();
-            if ((flag & (short) ParameterDirtyFlags.Height) != 0)
-                SetHeightParameter (stream.ReadInt32Packed ());
-            if ((flag & (short) ParameterDirtyFlags.Moving) != 0)
-                SetMovingParameter (stream.ReadBool ());
-            if ((flag & (short) ParameterDirtyFlags.Aiming) != 0)
-                SetAimingParameter (stream.ReadBool ());
-            if ((flag & (short) ParameterDirtyFlags.MovementSetID) != 0)
-                SetMovementSetIDParameter (stream.ReadInt32Packed ());
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkSpeed);
+            if ((flag & (short) ParameterDirtyFlags.Height) != 0) {
+                ByteUnpacker.ReadValuePacked (reader, out int value);
+                SetHeightParameter (value);
+            }
+            if ((flag & (short) ParameterDirtyFlags.Moving) != 0) {
+                ByteUnpacker.ReadValuePacked (reader, out bool value);
+                SetMovingParameter (value);
+            }
+            if ((flag & (short) ParameterDirtyFlags.Aiming) != 0) {
+                ByteUnpacker.ReadValuePacked (reader, out bool value);
+                SetAimingParameter (value);
+            }
+            if ((flag & (short) ParameterDirtyFlags.MovementSetID) != 0) {
+                ByteUnpacker.ReadValuePacked (reader, out int value);
+                SetMovementSetIDParameter (value);
+            }
             if ((flag & (short) ParameterDirtyFlags.AbilityIndex) != 0) {
-                var abilityIndex = stream.ReadInt32Packed ();
+                ByteUnpacker.ReadValuePacked (reader, out int abilityIndex);
                 // When the animator is snapped the ability index will be reset. 
                 // It may take some time for that value to propagate across the network.
                 // Wait to set the ability index until it is the correct reset value.
@@ -207,17 +236,23 @@ namespace GreedyVox.Networked.Ai {
                     m_SnappedAbilityIndex = -1;
                 }
             }
-            if ((flag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
-                SetAbilityIntDataParameter (stream.ReadInt32Packed ());
+            if ((flag & (short) ParameterDirtyFlags.AbilityIntData) != 0) {
+                ByteUnpacker.ReadValuePacked (reader, out int value);
+                SetAbilityIntDataParameter (value);
+            }
             if ((flag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
-                m_NetworkAbilityFloatData = stream.ReadSinglePacked ();
+                ByteUnpacker.ReadValuePacked (reader, out m_NetworkAbilityFloatData);
             if (HasItemParameters) {
-                var slot = (byte) stream.ReadInt16Packed ();
-                for (int i = 0; i < ParameterSlotCount; ++i) {
+                int id, state, index;
+                ByteUnpacker.ReadValuePacked (reader, out short slot);
+                for (int i = 0; i < ParameterSlotCount; i++) {
                     if ((slot & (i + 1)) != 0) {
-                        SetItemIDParameter (i, stream.ReadInt32Packed ());
-                        SetItemStateIndexParameter (i, stream.ReadInt32Packed ());
-                        SetItemSubstateIndexParameter (i, stream.ReadInt32Packed ());
+                        ByteUnpacker.ReadValuePacked (reader, out id);
+                        SetItemIDParameter (i, id);
+                        ByteUnpacker.ReadValuePacked (reader, out state);
+                        SetItemStateIndexParameter (i, state);
+                        ByteUnpacker.ReadValuePacked (reader, out index);
+                        SetItemSubstateIndexParameter (i, index);
                     }
                 }
             }
@@ -226,44 +261,48 @@ namespace GreedyVox.Networked.Ai {
         /// Called several times per second, so that your script can write synchronization data.
         /// </summary>
         /// <param name="stream">The stream that is being written.</param>
-        private bool SynchronizeParameters (PooledNetworkWriter stream) {
-            bool results = m_DirtyFlag > 0;
-            stream.WriteInt16Packed (m_DirtyFlag);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
-                stream.WriteSinglePacked (HorizontalMovement);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
-                stream.WriteSinglePacked (ForwardMovement);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Pitch) != 0)
-                stream.WriteSinglePacked (Pitch);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Yaw) != 0)
-                stream.WriteSinglePacked (Yaw);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Speed) != 0)
-                stream.WriteSinglePacked (Speed);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Height) != 0)
-                stream.WriteInt32Packed (Height);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Moving) != 0)
-                stream.WriteBool (Moving);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.Aiming) != 0)
-                stream.WriteBool (Aiming);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.MovementSetID) != 0)
-                stream.WriteInt32Packed (MovementSetID);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityIndex) != 0)
-                stream.WriteInt32Packed (AbilityIndex);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
-                stream.WriteInt32Packed (AbilityIntData);
-            if ((m_DirtyFlag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
-                stream.WriteSinglePacked (AbilityFloatData);
+        /// <summary>
+        /// Called several times per second, so that your script can write synchronization data.
+        /// </summary>
+        /// <param name="stream">The stream that is being written.</param>
+        private bool SynchronizeParameters () {
+            bool results = m_Flag > 0;
+            BytePacker.WriteValuePacked (m_FastBufferWriter, m_Flag);
+            if ((m_Flag & (short) ParameterDirtyFlags.HorizontalMovement) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, HorizontalMovement);
+            if ((m_Flag & (short) ParameterDirtyFlags.ForwardMovement) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, ForwardMovement);
+            if ((m_Flag & (short) ParameterDirtyFlags.Pitch) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, Pitch);
+            if ((m_Flag & (short) ParameterDirtyFlags.Yaw) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, Yaw);
+            if ((m_Flag & (short) ParameterDirtyFlags.Speed) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, Speed);
+            if ((m_Flag & (short) ParameterDirtyFlags.Height) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, Height);
+            if ((m_Flag & (short) ParameterDirtyFlags.Moving) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, Moving);
+            if ((m_Flag & (short) ParameterDirtyFlags.Aiming) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, Aiming);
+            if ((m_Flag & (short) ParameterDirtyFlags.MovementSetID) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, MovementSetID);
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityIndex) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIndex);
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityIntData) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityIntData);
+            if ((m_Flag & (short) ParameterDirtyFlags.AbilityFloatData) != 0)
+                BytePacker.WriteValuePacked (m_FastBufferWriter, AbilityFloatData);
             if (HasItemParameters) {
-                stream.WriteInt16Packed (m_ItemDirtySlot);
-                for (int i = 0; i < ParameterSlotCount; ++i) {
+                BytePacker.WriteValuePacked (m_FastBufferWriter, m_ItemDirtySlot);
+                for (int i = 0; i < ParameterSlotCount; i++) {
                     if ((m_ItemDirtySlot & (i + 1)) != 0) {
-                        stream.WriteInt32Packed (ItemSlotID[i]);
-                        stream.WriteInt32Packed (ItemSlotStateIndex[i]);
-                        stream.WriteInt32Packed (ItemSlotSubstateIndex[i]);
+                        BytePacker.WriteValuePacked (m_FastBufferWriter, ItemSlotID[i]);
+                        BytePacker.WriteValuePacked (m_FastBufferWriter, ItemSlotStateIndex[i]);
+                        BytePacker.WriteValuePacked (m_FastBufferWriter, ItemSlotSubstateIndex[i]);
                     }
                 }
             }
-            m_DirtyFlag = 0;
+            m_Flag = 0;
             m_ItemDirtySlot = 0;
             return results;
         }
@@ -280,7 +319,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetHorizontalMovementParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.HorizontalMovement;
+                m_Flag |= (short) ParameterDirtyFlags.HorizontalMovement;
                 return true;
             }
             return false;
@@ -298,7 +337,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetForwardMovementParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.ForwardMovement;
+                m_Flag |= (short) ParameterDirtyFlags.ForwardMovement;
                 return true;
             }
             return false;
@@ -316,7 +355,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetPitchParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Pitch;
+                m_Flag |= (short) ParameterDirtyFlags.Pitch;
                 return true;
             }
             return false;
@@ -334,7 +373,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetYawParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Yaw;
+                m_Flag |= (short) ParameterDirtyFlags.Yaw;
                 return true;
             }
             return false;
@@ -352,7 +391,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetSpeedParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Speed;
+                m_Flag |= (short) ParameterDirtyFlags.Speed;
                 return true;
             }
             return false;
@@ -368,7 +407,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetHeightParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Height;
+                m_Flag |= (short) ParameterDirtyFlags.Height;
                 return true;
             }
             return false;
@@ -384,7 +423,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetMovingParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Moving;
+                m_Flag |= (short) ParameterDirtyFlags.Moving;
                 return true;
             }
             return false;
@@ -400,7 +439,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAimingParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.Aiming;
+                m_Flag |= (short) ParameterDirtyFlags.Aiming;
                 return true;
             }
             return false;
@@ -416,7 +455,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetMovementSetIDParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.MovementSetID;
+                m_Flag |= (short) ParameterDirtyFlags.MovementSetID;
                 return true;
             }
             return false;
@@ -432,7 +471,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAbilityIndexParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityIndex;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityIndex;
                 return true;
             }
             return false;
@@ -448,7 +487,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAbilityIntDataParameter (value)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityIntData;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityIntData;
                 return true;
             }
             return false;
@@ -466,7 +505,7 @@ namespace GreedyVox.Networked.Ai {
                 return false;
             }
             if (base.SetAbilityFloatDataParameter (value, timeScale, dampingTime)) {
-                m_DirtyFlag |= (short) ParameterDirtyFlags.AbilityFloatData;
+                m_Flag |= (short) ParameterDirtyFlags.AbilityFloatData;
                 return true;
             }
             return false;

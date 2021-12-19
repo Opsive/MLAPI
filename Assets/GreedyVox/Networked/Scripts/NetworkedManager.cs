@@ -1,4 +1,5 @@
-﻿using MLAPI;
+﻿using Opsive.Shared.Events;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace GreedyVox.Networked {
@@ -22,25 +23,27 @@ namespace GreedyVox.Networked {
             if (m_AudioSource == null) {
                 m_AudioSource = gameObject.AddComponent<AudioSource> ();
             }
-
+        }
+        private void Start () {
             Connection.OnServerStarted += () => {
                 if (NetworkManager.Singleton.IsHost) {
                     Debug.Log ("<color=white>Server Started</color>");
                 }
             };
-
             Connection.OnClientDisconnectCallback += ID => {
-                m_NetworkSettings.PlayDisconnect (m_AudioSource);
-                Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red>{0}</color></b>]</color>", ID);
-            };
+                m_NetworkSettings?.PlayDisconnect (m_AudioSource);
+                EventHandler.ExecuteEvent ("OnPlayerDisconnected", ID);
 
-            Connection.OnClientConnectedCallback += ID => {
-                m_NetworkSettings.PlayConnect (m_AudioSource);
-                var client = Connection.ConnectedClients[ID];
-                Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", client, ID);
+                Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red><b>{0}</b></color></b>]</color>", ID);
             };
-        }
-        private void Start () {
+            Connection.OnClientConnectedCallback += ID => {
+                m_NetworkSettings?.PlayConnect (m_AudioSource);
+                var net = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject (ID);
+                net.gameObject.name = $"[{ID}]{net.gameObject.name}[{net.NetworkObjectId}]";
+                EventHandler.ExecuteEvent ("OnPlayerConnected", ID);
+
+                NetworkLog.LogInfoServer ($"<color=white>Server Client Connected {net.gameObject.name} ID: [<b><color=blue><b>{ID}</b></color></b>]</color>");
+            };
             if (m_NetworkSettings == null) {
                 Debug.LogErrorFormat ("NullReferenceException: There is no network settings manager\n{0}", typeof (NetworkedSettingsAbstract));
                 Quit ();

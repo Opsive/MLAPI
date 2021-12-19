@@ -1,19 +1,34 @@
-﻿using System.IO;
-using MLAPI;
+﻿using GreedyVox.Networked.Data;
 using Opsive.Shared.Events;
+using Unity.Netcode;
 
 namespace GreedyVox.Networked {
     public class NetworkedItemDrop : NetworkBehaviour {
-        private ISpawnDataObject m_SpawnData;
+        private IPayload m_Payload;
+        private CustomMessagingManager m_CustomMessagingManager;
+        private const string MsgNameClient = "MsgNetworkedItemDropClient";
         private void Awake () {
-            m_SpawnData = GetComponent<ISpawnDataObject> ();
+            m_Payload = GetComponent<IPayload> ();
         }
-        private void Start () {
+        private void OnEnable () {
             EventHandler.ExecuteEvent (gameObject, "OnWillRespawn");
         }
-        public override void NetworkStart (Stream stream) {
+        public override void OnNetworkDespawn () {
+            m_CustomMessagingManager?.UnregisterNamedMessageHandler (MsgNameClient);
+        }
+        public override void OnNetworkSpawn () {
             EventHandler.ExecuteEvent (gameObject, "OnRespawn");
-            m_SpawnData?.ObjectSpawned (stream, gameObject);
+            m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
+            m_Payload.OnNetworkSpawn ();
+            if (IsServer) {
+                if (m_Payload.Load (out var writer)) {
+                    m_CustomMessagingManager?.SendNamedMessage (MsgNameClient, NetworkManager.Singleton.ConnectedClientsIds, writer);
+                }
+            } else {
+                m_CustomMessagingManager?.RegisterNamedMessageHandler (MsgNameClient, (sender, reader) => {
+                    m_Payload?.Unload (ref reader, gameObject);
+                });
+            }
         }
     }
 }
