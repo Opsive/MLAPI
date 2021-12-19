@@ -4,7 +4,7 @@ namespace GreedyVox.Networked.Utilities {
     public sealed class ComponentUtility {
         public static bool HasComponent<T> (GameObject obj)
         where T : Component {
-            return obj.GetComponent<T> () != null;
+            return obj?.GetComponent<T> () != null;
         }
         public static void CopyValues<T> (T from, T to)
         where T : Component {

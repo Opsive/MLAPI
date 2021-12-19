@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using GreedyVox.Networked.Utilities;
 using Opsive.Shared.Game;
 using Opsive.UltimateCharacterController.Networking.Game;
 using Unity.Netcode;
@@ -10,9 +11,9 @@ using UnityEngine;
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedObjectPool : NetworkObjectPool {
-        [SerializeField] private NetworkedMessenger m_NetworkedMessenger = default;
         [Tooltip ("An array of objects that can be spawned over the network. Any object that can be spawned on the network must be within this list.")]
-        [SerializeField] private HashSet<GameObject> m_SpawnableGameObjects = new HashSet<GameObject> ();
+        [SerializeField] private List<GameObject> m_SpawnablePrefabs = new List<GameObject> ();
+        private HashSet<GameObject> m_SpawnableGameObjects = new HashSet<GameObject> ();
         private NetworkObject m_NetworkObject;
         private HashSet<GameObject> m_ActiveGameObjects = new HashSet<GameObject> ();
         private HashSet<GameObject> m_SpawnedGameObjects = new HashSet<GameObject> ();
@@ -20,15 +21,17 @@ namespace GreedyVox.Networked {
         /// Initialize the default values.
         /// </summary>
         private void Start () {
-            GameObject go;
+            for (int n = 0; n < m_SpawnablePrefabs.Count; n++) { SetupSpawnManager (m_SpawnablePrefabs[n], false); }
             var pool = FindObjectOfType<ObjectPool> ()?.PreloadedPrefabs;
-            for (int i = 0; i < pool?.Length; i++) {
-                go = pool[i].Prefab;
-                if (go != null && go.GetComponent<NetworkObject> () != null) {
-                    m_SpawnableGameObjects.Add (go);
-                    NetworkManager.Singleton.PrefabHandler.AddHandler (go,
-                        new NetworkedSpawnManager (go, transform));
-                }
+            for (int n = 0; n < pool?.Length; n++) {
+                SetupSpawnManager (pool[n].Prefab);
+            }
+        }
+        private void SetupSpawnManager (GameObject go, bool pool = true) {
+            if (ComponentUtility.HasComponent<NetworkObject> (go)) {
+                m_SpawnableGameObjects.Add (go);
+                NetworkManager.Singleton.PrefabHandler.AddHandler (go,
+                    new NetworkedSpawnManager (go, transform, pool));
             }
         }
         /// <summary>
@@ -70,8 +73,10 @@ namespace GreedyVox.Networked {
                 if (NetworkManager.Singleton.IsServer) {
                     m_NetworkObject.Despawn ();
                 } else if (NetworkManager.Singleton.IsClient) {
-                    m_NetworkedMessenger?.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
+                    NetworkedMessenger.Instance.ClientDespawnObject (m_NetworkObject.NetworkObjectId);
                 }
+            } else {
+                ObjectPool.Destroy (obj);
             }
             if (m_NetworkObject == null) {
                 m_ActiveGameObjects.Remove (obj);

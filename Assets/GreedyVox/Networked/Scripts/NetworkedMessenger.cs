@@ -4,8 +4,16 @@ using Unity.Netcode;
 
 namespace GreedyVox.Networked {
     public class NetworkedMessenger : NetworkBehaviour {
+        private static NetworkedMessenger _Instance;
+        public static NetworkedMessenger Instance { get { return _Instance; } }
         private CustomMessagingManager m_CustomMessagingManager;
         private const string MsgServerName = "MsgServerDespawnObject";
+        /// <summary>
+        /// The object has awaken.
+        /// </summary>
+        private void Awake () {
+            if (_Instance != null && _Instance != this) { Destroy (this.gameObject); } else { _Instance = this; }
+        }
         public override void OnNetworkDespawn () {
             m_CustomMessagingManager?.UnregisterNamedMessageHandler (MsgServerName);
         }

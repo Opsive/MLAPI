@@ -21,7 +21,6 @@ namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedCharacter : NetworkBehaviour, INetworkCharacter {
         private GameObject m_GameObject;
-        private NetworkedManager m_NetworkManager;
         private UltimateCharacterLocomotion m_CharacterLocomotion;
         private InventoryBase m_Inventory;
         private bool m_ItemsPickedUp;
@@ -30,7 +29,6 @@ namespace GreedyVox.Networked {
         /// </summary>
         private void Awake () {
             m_GameObject = gameObject;
-            m_NetworkManager = NetworkedManager.Instance;
             m_Inventory = m_GameObject.GetCachedComponent<InventoryBase> ();
             m_CharacterLocomotion = m_GameObject.GetCachedComponent<UltimateCharacterLocomotion> ();
         }
@@ -57,24 +55,24 @@ namespace GreedyVox.Networked {
         /// The object has been despawned.
         /// </summary>
         public override void OnNetworkDespawn () {
-            m_NetworkManager.PlayerConnectedEvent -= OnPlayerConnectedEvent;
-            m_NetworkManager.PlayerDisconnectedEvent -= OnPlayerDisconnectedEvent;
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerDisconnected", OnPlayerDisconnected);
         }
         /// <summary>
         /// Gets called when message handlers are ready to be registered and the networking is setup.
         /// </summary>
         public override void OnNetworkSpawn () {
             if (IsServer) {
-                m_NetworkManager.PlayerConnectedEvent += OnPlayerConnectedEvent;
-                m_NetworkManager.PlayerDisconnectedEvent += OnPlayerDisconnectedEvent;
+                EventHandler.RegisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
+                EventHandler.RegisterEvent<ulong> ("OnPlayerDisconnected", OnPlayerDisconnected);
             }
         }
         /// <summary>
         /// A player has disconnected. Perform any cleanup.
         /// </summary>
         /// <param name="player">The Player networking ID that disconnected.</param>
-        private void OnPlayerDisconnectedEvent (ulong id) {
-            if (OwnerClientId == id && m_CharacterLocomotion.LookSource != null &&
+        private void OnPlayerDisconnected (ulong ID) {
+            if (OwnerClientId == ID && m_CharacterLocomotion.LookSource != null &&
                 m_CharacterLocomotion.LookSource.GameObject != null) {
                 // The local character has disconnected. The character no longer has a look source.
                 var cameraController = m_CharacterLocomotion.LookSource.GameObject.GetComponent<CameraController> ();
@@ -88,7 +86,7 @@ namespace GreedyVox.Networked {
         /// A player has joined. Ensure the joining player is in sync with the current game state.
         /// </summary>
         /// <param name="id">The Player networking ID that connected.</param>
-        private void OnPlayerConnectedEvent (ulong id) {
+        private void OnPlayerConnected (ulong ID) {
             // Notify the joining player of the ItemIdentifiers that the player has within their inventory.
             if (m_Inventory != null) {
                 var items = m_Inventory.GetAllItems ();

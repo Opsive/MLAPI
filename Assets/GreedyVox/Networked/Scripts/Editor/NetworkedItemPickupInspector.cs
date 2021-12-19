@@ -34,6 +34,7 @@ public class NetworkedItemPickupInspector : EditorWindow {
         if (ComponentUtility.TryAddComponent<NetworkObject> (obj, out var net)) {
             net.AutoObjectParentSync = false;
         }
+        ComponentUtility.TryAddComponent<NetworkedInfo> (obj);
         if (ComponentUtility.HasComponent<Respawner> (obj)) {
             ComponentUtility.TryAddComponent<NetworkedRespawnerMonitor> (obj);
         }

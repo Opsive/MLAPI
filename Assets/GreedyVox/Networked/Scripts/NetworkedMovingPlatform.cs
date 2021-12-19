@@ -1,4 +1,5 @@
-﻿using Opsive.Shared.Game;
+﻿using Opsive.Shared.Events;
+using Opsive.Shared.Game;
 using Opsive.Shared.StateSystem;
 using Opsive.UltimateCharacterController.Game;
 using Opsive.UltimateCharacterController.Objects;
@@ -14,15 +15,15 @@ namespace GreedyVox.Networked {
     [RequireComponent (typeof (NetworkObject), typeof (NetworkedInfo), typeof (NetworkedEvent))]
     public class NetworkedMovingPlatform : MovingPlatform {
         private string m_MsgName;
+        private int m_MaxBufferSize;
         private NetworkedInfo m_NetworkInfo;
         private NetworkedEvent m_NetworkEvent;
-        private NetworkedSettingsAbstract m_Settings;
         private CustomMessagingManager m_CustomMessagingManager;
         protected override void Awake () {
             base.Awake ();
+            m_MaxBufferSize = MaxBufferSize ();
             m_NetworkInfo = GetComponent<NetworkedInfo> ();
             m_NetworkEvent = GetComponent<NetworkedEvent> ();
-            m_Settings = NetworkedManager.Instance.NetworkSettings;
             if (m_NetworkEvent != null) {
                 m_NetworkEvent.NetworkSpawnEvent += OnNetworkSpawn;
                 m_NetworkEvent.NetworkDespawnEvent += OnNetworkDespawn;
@@ -32,18 +33,17 @@ namespace GreedyVox.Networked {
         /// The object has been despawned.
         /// </summary>
         private void OnNetworkDespawn () {
-            NetworkManager.Singleton.OnClientConnectedCallback -= OnEvent;
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
         }
         /// <summary>
         /// The object has been spawned.
         /// </summary>
         private void OnNetworkSpawn () {
             m_CustomMessagingManager = NetworkManager.Singleton.CustomMessagingManager;
-            m_MsgName = $"{m_NetworkInfo.NetworkBehaviourId}MsgClientNetworkedMovingPlatform{m_NetworkInfo.OwnerClientId}";
+            m_MsgName = $"{m_NetworkInfo.NetworkObjectId}MsgClientNetworkedMovingPlatform{m_NetworkInfo.OwnerClientId}";
             if (m_NetworkInfo != null) {
                 if (m_NetworkInfo.IsServerHost ()) {
-                    // NetworkManager.Singleton.OnClientConnectedCallback += ID => { OnEvent (ID); };
-                    NetworkManager.Singleton.OnClientConnectedCallback += OnEvent;
+                    EventHandler.RegisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
                 } else {
                     m_CustomMessagingManager?.RegisterNamedMessageHandler (m_MsgName, (senderClientId, reader) => {
                         ByteUnpacker.ReadValuePacked (reader, out float time);
@@ -66,10 +66,18 @@ namespace GreedyVox.Networked {
             }
         }
         /// <summary>
+        /// Returns the maximus size for the fast buffer writer.
+        /// Added extra vector bytes, because of overflow with rotation.
+        /// </summary>               
+        private int MaxBufferSize () {
+            return sizeof (float) * 3 + sizeof (int) * 5 +
+                sizeof (float) * 3 * 3 + sizeof (float) * 4 * 3;
+        }
+        /// <summary>
         /// A event from the server has been sent.
         /// </summary>
-        /// <param name="photonEvent">The server event.</param>
-        public void OnEvent (ulong id) {
+        /// <param name="ulong">The server event.</param>
+        public void OnPlayerConnected (ulong ID) {
             var nextWaypointEventDelay = -1.0f;
             if (m_NextWaypointEvent != null) {
                 nextWaypointEventDelay = m_NextWaypointEvent.EndTime - Time.time;
@@ -78,22 +86,8 @@ namespace GreedyVox.Networked {
             for (int i = 0; i < States.Length - 1; i++) {
                 if (States[i].Active) { activeStates |= (int) Mathf.Pow (i + 1, 2); }
             }
-
             using (var writer = new FastBufferWriter (
-                FastBufferWriter.GetWriteSize (m_MoveTime) +
-                FastBufferWriter.GetWriteSize (nextWaypointEventDelay) +
-                FastBufferWriter.GetWriteSize (m_NextWaypointDistance) +
-                FastBufferWriter.GetWriteSize (activeStates) +
-                FastBufferWriter.GetWriteSize (m_NextWaypoint) +
-                FastBufferWriter.GetWriteSize ((int) m_Direction) +
-                FastBufferWriter.GetWriteSize (m_PreviousWaypoint) +
-                FastBufferWriter.GetWriteSize (m_ActiveCharacterCount) +
-                FastBufferWriter.GetWriteSize (m_TargetPosition) +
-                FastBufferWriter.GetWriteSize (m_Transform.position) +
-                FastBufferWriter.GetWriteSize (m_TargetRotation) +
-                FastBufferWriter.GetWriteSize (m_OriginalRotation) +
-                FastBufferWriter.GetWriteSize (m_Transform.rotation),
-                Allocator.Temp)) {
+                FastBufferWriter.GetWriteSize (m_MoveTime), Allocator.Temp, m_MaxBufferSize)) {
                 BytePacker.WriteValuePacked (writer, m_MoveTime);
                 BytePacker.WriteValuePacked (writer, nextWaypointEventDelay);
                 BytePacker.WriteValuePacked (writer, m_NextWaypointDistance);
@@ -107,7 +101,7 @@ namespace GreedyVox.Networked {
                 BytePacker.WriteValuePacked (writer, m_TargetRotation);
                 BytePacker.WriteValuePacked (writer, m_OriginalRotation);
                 BytePacker.WriteValuePacked (writer, m_Transform.rotation);
-                m_CustomMessagingManager?.SendNamedMessage (m_MsgName, id, writer);
+                m_CustomMessagingManager?.SendNamedMessage (m_MsgName, ID, writer);
             }
         }
         /// <summary>

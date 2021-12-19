@@ -32,16 +32,16 @@ namespace GreedyVox.Networked {
         /// Registering events.
         /// </summary>
         private void OnEnable () {
-            m_NetworkManager.PlayerConnectedEvent += OnPlayerConnectedEvent;
-            m_NetworkManager.PlayerDisconnectedEvent += OnPlayerDisconnectedEvent;
+            EventHandler.RegisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
+            EventHandler.RegisterEvent<ulong> ("OnPlayerDisconnected", OnPlayerDisconnected);
             EventHandler.RegisterEvent<GameObject, string, bool> ("OnStateChange", OnStateChange);
         }
         /// <summary>
         /// Removing events.
         /// </summary>
         private void OnDisable () {
-            m_NetworkManager.PlayerConnectedEvent -= OnPlayerConnectedEvent;
-            m_NetworkManager.PlayerDisconnectedEvent -= OnPlayerDisconnectedEvent;
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerConnected", OnPlayerConnected);
+            EventHandler.UnregisterEvent<ulong> ("OnPlayerDisconnected", OnPlayerDisconnected);
             EventHandler.UnregisterEvent<GameObject, string, bool> ("OnStateChange", OnStateChange);
         }
         /// <summary>
@@ -62,7 +62,7 @@ namespace GreedyVox.Networked {
         /// A player has disconnected. Perform any cleanup.
         /// </summary>
         /// <param name="player">The Player networking ID that disconnected.</param>
-        private void OnPlayerDisconnectedEvent (ulong id) {
+        private void OnPlayerDisconnected (ulong id) {
             m_ActiveCharacterStates.Remove (id);
             if (IsServer) m_Players.Remove (id);
         }
@@ -70,7 +70,7 @@ namespace GreedyVox.Networked {
         /// A player has connected. Ensure the joining player is in sync with the current game state.
         /// </summary>
         /// <param name="id">The Player networking ID that connected.</param>
-        private void OnPlayerConnectedEvent (ulong id) {
+        private void OnPlayerConnected (ulong id) {
             var net = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject (id);
             if (IsServer) {
                 m_Players.Add (id, net);

@@ -1,13 +1,10 @@
-﻿using Unity.Netcode;
+﻿using Opsive.Shared.Events;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace GreedyVox.Networked {
     [DisallowMultipleComponent]
     public class NetworkedManager : AbstractSingletonBehaviour<NetworkedManager> {
-        public EventPlayerConnected PlayerConnectedEvent;
-        public delegate void EventPlayerConnected (ulong id);
-        public EventPlayerDisconnected PlayerDisconnectedEvent;
-        public delegate void EventPlayerDisconnected (ulong id);
         [SerializeField] private NetworkedSettingsAbstract m_NetworkSettings = null;
         public NetworkedSettingsAbstract NetworkSettings { get { return m_NetworkSettings; } }
         private AudioSource m_AudioSource;
@@ -26,25 +23,6 @@ namespace GreedyVox.Networked {
             if (m_AudioSource == null) {
                 m_AudioSource = gameObject.AddComponent<AudioSource> ();
             }
-
-            // Connection.OnServerStarted += () => {
-            //     if (NetworkManager.Singleton.IsHost) {
-            //         Debug.Log ("<color=white>Server Started</color>");
-            //     }
-            // };
-
-            // Connection.OnClientDisconnectCallback += ID => {
-            //     m_NetworkSettings.PlayDisconnect (m_AudioSource);
-            //     NetworkLog.LogInfoServer ("<color=white>Client Disconnected</color>");
-            //     Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red>{0}</color></b>]</color>", ID);
-            // };
-
-            // Connection.OnClientConnectedCallback += ID => {
-            //     m_NetworkSettings.PlayConnect (m_AudioSource);
-            //     var client = Connection.ConnectedClients[ID];
-            //     NetworkLog.LogInfoServer ("<color=white>Client Connected</color>");
-            //     Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", client, ID);
-            // };
         }
         private void Start () {
             Connection.OnServerStarted += () => {
@@ -53,17 +31,18 @@ namespace GreedyVox.Networked {
                 }
             };
             Connection.OnClientDisconnectCallback += ID => {
-                PlayerDisconnectedEvent?.Invoke (ID);
                 m_NetworkSettings?.PlayDisconnect (m_AudioSource);
-                Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red>{0}</color></b>]</color>", ID);
+                EventHandler.ExecuteEvent ("OnPlayerDisconnected", ID);
+
+                Debug.LogFormat ("<color=white>Server Client Disconnected ID: [<b><color=red><b>{0}</b></color></b>]</color>", ID);
             };
             Connection.OnClientConnectedCallback += ID => {
-                PlayerConnectedEvent?.Invoke (ID);
                 m_NetworkSettings?.PlayConnect (m_AudioSource);
                 var net = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject (ID);
                 net.gameObject.name = $"[{ID}]{net.gameObject.name}[{net.NetworkObjectId}]";
+                EventHandler.ExecuteEvent ("OnPlayerConnected", ID);
 
-                Debug.LogFormat ("<color=white>Server Client Connected {0} ID: [<b><color=red>{1}</color></b>]</color>", Connection.LocalClient, ID);
+                NetworkLog.LogInfoServer ($"<color=white>Server Client Connected {net.gameObject.name} ID: [<b><color=blue><b>{ID}</b></color></b>]</color>");
             };
             if (m_NetworkSettings == null) {
                 Debug.LogErrorFormat ("NullReferenceException: There is no network settings manager\n{0}", typeof (NetworkedSettingsAbstract));
