@@ -74,7 +74,6 @@ The Pickup Item prefab will now have all the networking scripts added and ready 
 
 Spawning prefabs into the game world must be in the network prefab list, this will insure that server will spawn automatically across networked clients.
 
-<p align="center">Watch video below to see everything in action.</p>
+<h4><p align="center">Watch video below to see everything in action.</p></h4>
 
-<p align="center"><a href="http://www.youtube.com/watch?feature=player_embedded&v=v=mAoPNPCUn40" target="_blank"><img src="https://user-images.githubusercontent.com/69744813/146674310-14104dcd-c135-44e8-b511-cd77f043974e.jpg" 
-alt="YAARRGH! Battle Island!" width="240" height="180" border="10"/></a></p>
+<p align="center"><kbd><a href="https://www.youtube.com/embed/mAoPNPCUn40" target="_blank"><img src="https://user-images.githubusercontent.com/69744813/146674735-87a86fa0-ef98-453b-be55-3de15e8decda.png" alt="YAARRGH! Battle Island!" width="240" height="180" border="10"/></a></kbd></p>
