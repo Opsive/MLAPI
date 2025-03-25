@@ -3,7 +3,8 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 2
-  tags: []
+  tags:
+  - Ai
   layers:
   - Default
   - TransparentFX
@@ -31,12 +32,12 @@ TagManager:
   - 
   - 
   - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
+  - Enemy
+  - MovingPlatform
+  - VisualEffect
+  - Overlay
+  - SubCharacter
+  - Character
   m_SortingLayers:
   - name: Default
     uniqueID: 0
